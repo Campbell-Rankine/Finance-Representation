@@ -60,3 +60,17 @@ class input_transform(nn.Module):
         
     def forward(self, x):
         return F.interpolate(self.cvt(x), (64,64))
+
+class output_transform(nn.Module):
+    """
+    Learned input transform for the encoder model
+    """
+    def __init__(self, in_c, out_c, dim):
+        super().__init__()
+        args = {'in_channels': in_c, 'out_channels': out_c, 
+                    'kernel_size' : (1,1), 'stride' : (1,1)}
+        self.cvt_r = nn.ConvTranspose2d(**args)
+        self.dim = dim
+        
+    def forward(self, x):
+        return F.interpolate(self.cvt_r(x), self.dim)

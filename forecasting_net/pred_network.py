@@ -30,9 +30,12 @@ class Encoder(nn.Module):
     Other methods and variables define easy accessing of important network information
     """
 
-    def __init__(self, batch_size, window_size, features):
+    def __init__(self, batch_size, window_size, dims):
         super(Encoder, self).__init__()
-        self.features = features
+        self.features = dims[1]
+        self.dataframes = dims[0]
+
+        self.dims = dims
 
         ### - Define VGG-16 Encoder Step - ###
         #self.normalize = nn.BatchNorm2d(self.features)
@@ -47,9 +50,10 @@ class Encoder(nn.Module):
 
         ### - Utils - ###
         self.batch_size = batch_size
-        self.input_dims = (batch_size, features, window_size) #Picture creating a 4 channel input image
+        self.input_dims = (batch_size, self.features, window_size) #Picture creating a 4 channel input image
         self.in_channels = self.input_dims[-1]
         self.out_channels = 512
+        self.activation = nn.Sigmoid()
 
     
     def forward(self, x):
@@ -70,8 +74,8 @@ class Encoder(nn.Module):
                 pool_indices.append(output[1])
             else:
                 x_current = output
-
-        return transform_x, x_current, pool_indices
+        x_current = self.activation(x_current)
+        return x_current, pool_indices
 
     def get_shape(self):
         """
@@ -142,6 +146,8 @@ class Decoder(nn.Module):
         self.decoder = invert_encoder(encoder.encoder)
         self.in_channels = encoder.out_channels
         self.out_channels = encoder.in_channels
+        self.convert = output_transform(3, 1, encoder.dims)
+        self.activation = nn.Sigmoid()
 
     def forward(self, x, pool_indices):
         x_current = x
@@ -156,7 +162,7 @@ class Decoder(nn.Module):
                 k_pool += 1
             else:
                 x_current = module_decode(x_current)
-
+        x_current = self.activation(self.convert(x_current).squeeze(1))
         return x_current
     
 
@@ -180,8 +186,8 @@ class VGG16_AE(nn.Module):
         self.freeze_encoder = False
 
     def forward(self, x):
-        transform_x, encoded, pool_indices = self.encoder(x)
+        encoded, pool_indices = self.encoder(x)
         decoded = self.decoder(encoded, pool_indices)
-        return decoded, transform_x
+        return decoded
 
 

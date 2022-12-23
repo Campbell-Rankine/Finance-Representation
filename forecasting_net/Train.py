@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
     ### - Define Loss - ###
     reg_fn = Regularizer(0.05)
-    loss = nn.MSELoss()
+    loss = nn.BCEWithLogitsLoss()
     assert(callable(loss_fn))
 
     ### - Create Dataset/DataLoader - ###
@@ -52,13 +52,17 @@ if __name__ == '__main__':
         from data import *
         download_build(dataset_p_)
 
-    dataset = StockData(dataset_p_, 128, device)
+    transform = transforms.Compose([transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+    dataset = StockData(dataset_p_, 128, device, transform=transform)
     dataloader = DataLoader(dataset, batch_size=args.batch, shuffle=True, num_workers=args.dw)
 
     num_features = dataset.features()
-
+    dims = dataset[0].shape
+    
+    ### - Model Definition - ###
     encoder_args = {'batch_size': args.batch, 'window_size': args.window,
-                    'features': num_features}
+                    'dims': dims}
     decoder_args = {}
 
     model = VGG16_AE(encoder_args, decoder_args, device)
@@ -87,13 +91,15 @@ if __name__ == '__main__':
 
         ### - iterate through dataset - ###
         for i, x in enumerate(dataloader):
+            if i % args.batch == 0:
+                running_loss = 0.
             x.requires_grad = True
             optim.zero_grad()
-            out, transform_x = model(x.detach())
+            out = model(x.detach().to(device))
             #print(T.autograd.grad(out,x.detach()))
             #assert(out.requires_grad == True)
             #reg = reg_fn(T.autograd.grad(out,x.detach()))
-            loss_ = loss(out, transform_x)
+            loss_ = loss(out, x)
 
             loss_.backward()
             losses.append(loss_.item())
