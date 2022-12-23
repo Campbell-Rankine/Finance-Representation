@@ -79,7 +79,7 @@ if __name__ == '__main__':
         scheduler = T.optim.lr_scheduler.ExponentialLR(optim, 0.9, last_epoch=- 1, verbose=False)
     model.train()
     databar = tqdm(range(epochs))
-
+    epoch_losses = []
     for epoch in databar:
         T.cuda.empty_cache()
         ### - Databar Init - ###
@@ -94,8 +94,9 @@ if __name__ == '__main__':
             if i % args.batch == 0:
                 running_loss = 0.
             x.requires_grad = True
+            x = x.to(device)
             optim.zero_grad()
-            out = model(x.detach().to(device))
+            out = model(x.detach())
             #print(T.autograd.grad(out,x.detach()))
             #assert(out.requires_grad == True)
             #reg = reg_fn(T.autograd.grad(out,x.detach()))
@@ -110,6 +111,14 @@ if __name__ == '__main__':
 
             optim.step()
             scheduler.step()
+        epoch_losses.append(np.mean(losses))
 
+    print('Saving Trained Network')
+    check_point = { 'model' : model.state_dict(), 
+                    'optimizer' : optim.state_dict(),
+                    'epoch_losses' : epoch_losses,
+                           }
+    T.save(check_point, 'SM_Representation_Net.pth')
+    print('Done!')
 
 

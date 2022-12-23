@@ -324,7 +324,7 @@ class StockData(Dataset):
             end_ = len(X) - self.spacing
 
             X = X[start_: end_, :]
-            return T.tensor(X).to(self.device)
+            return T.tensor(X)
         except TypeError:
             print('invalid DataFrame at %s. Returning next index' % (self.keys[index]))
             key = self.keys[index+1]
