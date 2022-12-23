@@ -95,8 +95,6 @@ if __name__ == '__main__':
 
         ### - iterate through dataset - ###
         for i, x in enumerate(dataloader):
-            if i % args.batch == 0:
-                running_loss = 0.
             x.requires_grad = True
             x = x.to(device)
             #model.zero_grad()
@@ -107,15 +105,17 @@ if __name__ == '__main__':
             #assert(out.requires_grad == True)
             #reg = reg_fn(T.autograd.grad(out,x.detach()))
             loss_ = loss(out, x)
+            penalty = 0.
             if not i == 0:
-                loss_ += T.norm(model.encoder.get_activations_gradient(), 'fro')
+                penalty = T.norm(model.encoder.get_activations_gradient(), 'fro')
+                loss_ += penalty
             loss_.backward()
             
             #losses.append(loss_.item())
             running_loss += np.abs(loss_.item()) / args.batch
             
-            databar.set_description('Epoch: %i, Loss: %0.2f, Running Loss: %.2f, Sample #: %i' % 
-                                    (epoch, loss_.item(), running_loss, i))
+            databar.set_description('Epoch: %i, Loss: %0.2f, Running Loss: %.2f, Grad Penalty: %.2f, Sample #: %i' % 
+                                    (epoch, loss_.item(), running_loss, penalty, i))
             nn.utils.clip_grad_value_(model.parameters(), clip_value=10.0)
             optim.step()
             scheduler.step()
