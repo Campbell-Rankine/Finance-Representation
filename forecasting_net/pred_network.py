@@ -52,9 +52,15 @@ class Encoder(nn.Module):
         self.batch_size = batch_size
         self.input_dims = (batch_size, self.features, window_size) #Picture creating a 4 channel input image
         self.in_channels = self.input_dims[-1]
-        self.out_channels = 512
+        self.out_channels = 2048
         self.activation = nn.Sigmoid()
+        self.gradients = 0.
+    
+    def activations_hook(self, grad):
+        self.gradients = grad
 
+    def get_activations_gradient(self):
+        return self.gradients
     
     def forward(self, x):
         """
@@ -74,8 +80,9 @@ class Encoder(nn.Module):
                 pool_indices.append(output[1])
             else:
                 x_current = output
-        x_current = self.activation(x_current)
-        return x_current, pool_indices
+        activation = self.activation(x_current)
+        h = activation.register_hook(self.activations_hook)
+        return activation, pool_indices
 
     def get_shape(self):
         """

@@ -80,6 +80,10 @@ if __name__ == '__main__':
     model.train()
     databar = tqdm(range(epochs))
     epoch_losses = []
+
+    ### - Penalty - ###
+    g_pen = 0.
+
     for epoch in databar:
         T.cuda.empty_cache()
         ### - Databar Init - ###
@@ -95,20 +99,24 @@ if __name__ == '__main__':
                 running_loss = 0.
             x.requires_grad = True
             x = x.to(device)
+            #model.zero_grad()
             optim.zero_grad()
             out = model(x.detach())
+
             #print(T.autograd.grad(out,x.detach()))
             #assert(out.requires_grad == True)
             #reg = reg_fn(T.autograd.grad(out,x.detach()))
             loss_ = loss(out, x)
-
+            if not i == 0:
+                loss_ += T.norm(model.encoder.get_activations_gradient(), 'fro')
             loss_.backward()
-            losses.append(loss_.item())
-            running_loss += loss_.item() / args.batch
+            
+            #losses.append(loss_.item())
+            running_loss += np.abs(loss_.item()) / args.batch
             
             databar.set_description('Epoch: %i, Loss: %0.2f, Running Loss: %.2f, Sample #: %i' % 
                                     (epoch, loss_.item(), running_loss, i))
-
+            nn.utils.clip_grad_value_(model.parameters(), clip_value=10.0)
             optim.step()
             scheduler.step()
         epoch_losses.append(np.mean(losses))
