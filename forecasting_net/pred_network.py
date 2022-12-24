@@ -3,10 +3,6 @@
 import torch as T
 import torch.nn as nn
 import torch.nn.functional as F
-
-import pytorch_forecasting
-from pytorch_forecasting.models import TemporalFusionTransformer
-
 import torchvision
 import torchvision.models as models
 
@@ -30,7 +26,7 @@ class Encoder(nn.Module):
     Other methods and variables define easy accessing of important network information
     """
 
-    def __init__(self, batch_size, window_size, dims):
+    def __init__(self, batch_size, window_size, latent, dims):
         super(Encoder, self).__init__()
         self.features = dims[1]
         self.dataframes = dims[0]
@@ -38,13 +34,12 @@ class Encoder(nn.Module):
         self.dims = dims
 
         ### - Define VGG-16 Encoder Step - ###
-        #self.normalize = nn.BatchNorm2d(self.features)
         self.input_transform = input_transform(1, 3)
         self.encoder = models.vgg16(pretrained=False)
 
         ### - 512 Dimensional output representation vector - ###
         del self.encoder.classifier
-        self.encoder.avgpool = nn.AdaptiveAvgPool2d(output_size=(512, 1))
+        self.encoder.avgpool = nn.AdaptiveAvgPool2d(output_size=(latent, 1))
 
         self.encoder = self._encodify_(self.encoder)
 
@@ -52,15 +47,31 @@ class Encoder(nn.Module):
         self.batch_size = batch_size
         self.input_dims = (batch_size, self.features, window_size) #Picture creating a 4 channel input image
         self.in_channels = self.input_dims[-1]
-        self.out_channels = 2048
+        self.out_channels = latent
         self.activation = nn.Sigmoid()
-        self.gradients = 0.
+        self.gradients = None
     
     def activations_hook(self, grad):
         self.gradients = grad
 
     def get_activations_gradient(self):
         return self.gradients
+    
+    def get_activations(self, x):
+        pool_indices = []
+        x_current = self.input_transform(x)
+        for module_encode in self.encoder:
+            #x_current = T.tensor(x_current, dtype=float)
+            output = module_encode(x_current)
+
+            # If the module is pooling, there are two outputs, the second the pool indices
+            if isinstance(output, tuple) and len(output) == 2:
+                x_current = output[0]
+                pool_indices.append(output[1])
+            else:
+                x_current = output
+        activation = self.activation(x_current)
+        return activation
     
     def forward(self, x):
         """
@@ -69,7 +80,6 @@ class Encoder(nn.Module):
         pool_indices = []
         x_current = self.input_transform(x)
         transform_x = x_current
-        #x_current = self.normalize(x)
         for module_encode in self.encoder:
             #x_current = T.tensor(x_current, dtype=float)
             output = module_encode(x_current)
@@ -182,9 +192,6 @@ class VGG16_AE(nn.Module):
 
         self.encoder = Encoder(**encoder_args).to(device)
         self.decoder = Decoder(self.encoder, **decoder_args).to(device)
-
-        #print(self.encoder)
-        #print(self.decoder)
 
         self.in_channels = self.encoder.in_channels
         self.latent_dim = self.encoder.out_channels

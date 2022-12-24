@@ -240,7 +240,13 @@ def process_command_line_arguments() -> argparse.Namespace:
     parser.add_argument("-d", "--d", dest="d", metavar="d", default = False,
                         type=bool, help="Download default s&p 500 data")
     
+    parser.add_argument("-clip", "--clip", dest="clip", metavar="clip", default = False,
+                        type=bool, help="Gradient clipping: clipped at 10")
+    
     ### - Network Params - ###
+
+    parser.add_argument("-latent", "--latent", dest="latent", metavar="latent", default = 2048,
+                        type=int, help="latent size")
 
     parser.add_argument("-window", "--window", dest="window", metavar="window", default = 120,
                         type=int, help="default window training size")

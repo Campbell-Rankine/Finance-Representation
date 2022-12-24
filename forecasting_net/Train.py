@@ -11,13 +11,19 @@ import os
 from constants import *
 from tqdm import tqdm
 
+### - Logging - ###
+import tensorboard
+from torch.utils.tensorboard import SummaryWriter
+
 ### - internal - ###
 from pred_network import *
 from network_utils import *
 
 if __name__ == '__main__':
     args = process_command_line_arguments()
-
+    if args.log:
+        sw = SummaryWriter(args.log_dir)
+    
     ### - Get dataset (maybe overwritten)path
     dataset_p_ = None
     if args.in_dest is None:
@@ -61,7 +67,7 @@ if __name__ == '__main__':
     dims = dataset[0].shape
     
     ### - Model Definition - ###
-    encoder_args = {'batch_size': args.batch, 'window_size': args.window,
+    encoder_args = {'batch_size': args.batch, 'window_size': args.window, 'latent': args.latent,
                     'dims': dims}
     decoder_args = {}
 
@@ -83,16 +89,15 @@ if __name__ == '__main__':
 
     ### - Penalty - ###
     g_pen = 0.
-
+    penalty = 0.
     for epoch in databar:
-        T.cuda.empty_cache()
         ### - Databar Init - ###
         losses = []
         databar.set_description('Epoch: %i, Loss: %0.2f, Grad: %0.2f, Regularization Penalty: %.2f, Sample #: %i' % 
         (epoch, 0., 0., 0., 0))
         running_loss = 0.0
         instances = 0
-
+        
         ### - iterate through dataset - ###
         for i, x in enumerate(dataloader):
             x.requires_grad = True
@@ -101,24 +106,26 @@ if __name__ == '__main__':
             optim.zero_grad()
             out = model(x.detach())
 
-            #print(T.autograd.grad(out,x.detach()))
-            #assert(out.requires_grad == True)
-            #reg = reg_fn(T.autograd.grad(out,x.detach()))
             loss_ = loss(out, x)
-            penalty = 0.
-            if not i == 0:
-                penalty = T.norm(model.encoder.get_activations_gradient(), 'fro')
-                loss_ += penalty
+            try:
+                model.eval()
+                p = T.norm(model.encoder.get_activations_gradient(), 'fro')
+                model.train()
+            except:
+                p = 0.
+            loss_ += p
             loss_.backward()
             
             #losses.append(loss_.item())
             running_loss += np.abs(loss_.item()) / args.batch
             
-            databar.set_description('Epoch: %i, Loss: %0.2f, Running Loss: %.2f, Grad Penalty: %.2f, Sample #: %i' % 
-                                    (epoch, loss_.item(), running_loss, penalty, i))
-            nn.utils.clip_grad_value_(model.parameters(), clip_value=10.0)
+            databar.set_description('Epoch: %i, Loss: %0.2f, Running Loss: %.2f, Grad Penalty: %e, Sample #: %i' % 
+                                    (epoch, loss_.item(), running_loss, p, i))
+            if args.clip:
+                nn.utils.clip_grad_value_(model.parameters(), clip_value=10.0)
             optim.step()
-            scheduler.step()
+            if args.sched:
+                scheduler.step()
         epoch_losses.append(np.mean(losses))
 
     print('Saving Trained Network')
