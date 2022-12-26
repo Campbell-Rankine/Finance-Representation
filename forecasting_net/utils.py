@@ -348,9 +348,9 @@ class StockData(Dataset):
 
 def get_loss_fn(lossarg: str) -> callable:
     if lossarg == 'BCE':
-        return T.nn.BCEWithLogitsLoss
+        return T.nn.BCEWithLogitsLoss()
     elif lossarg == 'MSE':
-        return T.nn.MSELoss
+        return T.nn.MSELoss()
     else:
         print("%s is an invalid loss fn" % lossarg)
         raise AttributeError

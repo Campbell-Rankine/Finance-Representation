@@ -51,6 +51,7 @@ if __name__ == '__main__':
     ### - Define Loss - ###
     reg_fn = Regularizer(0.05)
     loss = get_loss_fn(args.loss)
+    print(loss)
     assert(callable(loss_fn))
 
     ### - Create Dataset/DataLoader - ###
@@ -105,7 +106,6 @@ if __name__ == '__main__':
             #model.zero_grad()
             optim.zero_grad()
             out = model(x.detach())
-
             loss_ = loss(out, x)
             try:
                 model.eval()
