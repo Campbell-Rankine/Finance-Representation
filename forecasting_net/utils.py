@@ -245,6 +245,9 @@ def process_command_line_arguments() -> argparse.Namespace:
     
     ### - Network Params - ###
 
+    parser.add_argument("-loss", "--loss", dest="loss", metavar="loss", default = 'BCE',
+                        type=str, help="Loss for reconstruction objective")
+
     parser.add_argument("-latent", "--latent", dest="latent", metavar="latent", default = 2048,
                         type=int, help="latent size")
 
@@ -342,3 +345,12 @@ class StockData(Dataset):
 
             X = X[start_: end_, :]
             return T.tensor(X)
+
+def get_loss_fn(lossarg: str) -> callable:
+    if lossarg == 'BCE':
+        return T.nn.BCEWithLogitsLoss
+    elif lossarg == 'MSE':
+        return T.nn.MSELoss
+    else:
+        print("%s is an invalid loss fn" % lossarg)
+        raise AttributeError

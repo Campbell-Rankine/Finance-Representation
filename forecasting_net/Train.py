@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
     ### - Define Loss - ###
     reg_fn = Regularizer(0.05)
-    loss = nn.BCEWithLogitsLoss()
+    loss = get_loss_fn(args.loss)
     assert(callable(loss_fn))
 
     ### - Create Dataset/DataLoader - ###
