@@ -21,8 +21,8 @@ from network_utils import *
 
 if __name__ == '__main__':
     args = process_command_line_arguments()
-    if args.log:
-        sw = SummaryWriter(args.log_dir)
+    #if args.log:
+    #    sw = SummaryWriter(args.log_dir)
     
     ### - Get dataset (maybe overwritten)path
     dataset_p_ = None
