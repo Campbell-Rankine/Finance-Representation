@@ -65,19 +65,20 @@ class PreTrainEnv(gym.env):
         return spaces.Box(low=np.zeros_like(self.dims), high=self.max_price*np.ones_like(self.dims), dtype=np.float32)
     
     def _get_observation(self):
-        return self.data[:][:][self.timestep, max(self.timestep+self.window, self.dims[-1])]
+        return self.data[:][:][self.timestep, min(self.timestep+self.window, self.dims[-1])]
     
     def _get_current_prices(self):
         """
         For the sake of adding noise sample a random price from somewhere within the [t - tolerance, t + tolerance] range
         """
-        raise NotImplementedError
+        return np.random.uniform(self.data[:][:][max(self.timestep - self.tolerance, 0), min(self.timestep + self.tolerance, 0)])
 
     def _reward(self):
         curr_worth = self.holdings @ self.current_prices
+        net_change = curr_worth - self.initial
         #TODO: Risk balancing, fund management, etc.
         time_pen = self.timestep / self.MAX_ITERS
-        return curr_worth * time_pen
+        return net_change * time_pen
 
     def step(self, action):
         #update for reward
@@ -87,6 +88,7 @@ class PreTrainEnv(gym.env):
 
         #get reward and done flag
         worth = self._reward()
+        self.prev_reward = self._reward()
         done = worth <= 0 or self.available_funds < 0
 
         #next observation
@@ -107,6 +109,10 @@ class PreTrainEnv(gym.env):
         obs = self._get_observation()
         return obs
 
-    def render(self):
-        #TODO: save price graphs for each stock to a folder, and current holdings will be included on graph
-        raise NotImplementedError
+    def render(self, mode='human', close=False):
+        print('Current holdings at %i: ' % self.timestep)
+        print(self.holdings)
+        print()
+        print('Reward: %.2f' % self.prev_reward)
+        print('Available Funds: %.2f' % self.available_funds)
+        print('-----------------------------')
