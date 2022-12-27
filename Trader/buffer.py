@@ -23,6 +23,10 @@ class ReplayBuffer(object):
             return random.sample(self.buffer, self.num_experiences)
         else:
             return random.sample(self.buffer, sample_size)
+    
+    def reset(self):
+        self.storage = deque()
+        self.num_exp = 0
 
     
     ### - ATTRIBUTE FUNCTIONS - ###
