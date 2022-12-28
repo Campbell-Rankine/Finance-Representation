@@ -16,13 +16,16 @@ import seaborn as sns
 ### - logging - ###
 import tensorboard
 from torch.utils.tensorboard import SummaryWriter
+from collections import deque
+from Trader.trade_utils import plot_mem
 
 class PreTrainEnv(gym.env):
     def __init__(self, initial_fund, trade_price, dims, num_tickers, max_hold, max_stock_value, window, _iters_, dataset,
-                tolerance):
+                tolerance, agent):
         super(PreTrainEnv, self).__init__()
 
         ### - Reset Vars - ###
+        self.agent = agent
         self.initial = initial_fund
         self.trade_price = trade_price
         self.data = dataset #(DATASET FORMAT, self.dims = (num_tickers, num_features, num_samples))
@@ -50,6 +53,9 @@ class PreTrainEnv(gym.env):
         ### - Timestep vars - ###
         self.holdings = np.zeros(num_tickers, dtype=np.int64)
         self.current_prices = np.zeros(num_tickers, dtype=np.float32)
+
+        ### - Rendering - ###
+        self.storage = plot_mem(100)
     
     def gen_action_space(self):
         """
@@ -75,10 +81,10 @@ class PreTrainEnv(gym.env):
 
     def _reward(self):
         curr_worth = self.holdings @ self.current_prices
-        net_change = curr_worth - self.initial
+        self.net_change = curr_worth - self.initial
         #TODO: Risk balancing, fund management, etc.
         time_pen = self.timestep / self.MAX_ITERS
-        return net_change * time_pen
+        return self.net_change * time_pen
 
     def step(self, action):
         #update for reward
@@ -107,6 +113,8 @@ class PreTrainEnv(gym.env):
 
         ### - first obs - ###
         obs = self._get_observation()
+
+        self.agent.reset()
         return obs
 
     def render(self, mode='human', close=False):
@@ -116,3 +124,7 @@ class PreTrainEnv(gym.env):
         print('Reward: %.2f' % self.prev_reward)
         print('Available Funds: %.2f' % self.available_funds)
         print('-----------------------------')
+
+        self.storage.add(self.net_change)
+        t_x = sns.scatterplot(list(self.storage.storage), cmap=sns.color_palette("magma", as_cmap=True))
+        plt.savefig(fname='Tmp/change_at_' + str(self.timestep) + '.png')

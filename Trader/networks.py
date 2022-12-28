@@ -191,7 +191,7 @@ class Agent(nn.Module):
         self.actor.eval()
         observation = T.tensor(observation, dtype=T.float).to(self.actor.device)
         mu = self.actor.forward(observation).to(self.actor.device)
-        mu_prime = mu + T.tensor(self.noise(),
+        mu_prime = mu + T.tensor(self.noise.sample(),
                                  dtype=T.float).to(self.actor.device)
         self.actor.train()
         return mu_prime.cpu().detach().numpy()
@@ -246,6 +246,10 @@ class Agent(nn.Module):
 
 
     ### - Helpers - ###
+    def reset(self):
+        self.memory.reset()
+        self.noise.reset()
+
     def save_models(self):
         self.actor.save_checkpoint()
         self.target_actor.save_checkpoint()
