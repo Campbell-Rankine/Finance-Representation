@@ -1,5 +1,6 @@
 ### - Standard NN Imports - ###
 import gym
+from gym import Env
 import torch as T
 import torch.nn.functional as F
 import numpy as np
@@ -19,7 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 from collections import deque
 from Trader.trade_utils import plot_mem
 
-class PreTrainEnv(gym.env):
+class PreTrainEnv(Env):
     def __init__(self, initial_fund, trade_price, dims, num_tickers, max_hold, max_stock_value, window, _iters_, dataset,
                 tolerance, agent):
         super(PreTrainEnv, self).__init__()
