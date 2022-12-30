@@ -2,7 +2,29 @@ import torch as T
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import pickle
+import ray
+from tqdm import tqdm
 import sklearn
+
+@ray.remote(max_retries=5)
+def process(key, raw_data: dict):
+    item = raw_data[key]
+    #try:
+    item = item.drop('ticker', axis=1)
+    #except :
+    return item.values
+
+def build_dataset(raw_data: dict):
+    keys = list(raw_data.keys())
+    ids = [process.remote(key, raw_data) for key in keys]
+    data = ray.get(ids)
+    return np.array(data)
+    
+def load_dataset(file):
+    with open(file, 'rb') as f:
+        data = pickle.load(f)
+    return data
 
 class OrnsteinUhlenbeckActionNoise:
     """
@@ -38,7 +60,7 @@ class MBSTD(nn.Module):
         mean = T.mean(std)
         return T.cat((x, mean.repeat(size)),dim=1)
 import argparse
-def process_command_line_arguments() -> argparse.Namespace:
+def process_command_line_arguments_() -> argparse.Namespace:
     """Parse the command line arguments and return an object with attributes
     containing the parsed arguments or their default values.
     """
@@ -78,6 +100,11 @@ def process_command_line_arguments() -> argparse.Namespace:
                         type=str, help="store network checkpoints")
     
     ### - Network Params - ###
+    parser.add_argument("-h1", "--h1", dest="h1", metavar="h1", default = 300,
+                        type=int, help="1st Hidden Layer Size")
+    
+    parser.add_argument("-h2", "--h2", dest="h2", metavar="h2", default = 400,
+                        type=int, help="2nd Hidden Layer Size")
 
     parser.add_argument("-batch", "--batch", dest="batch", metavar="batch", default = 64,
                         type=int, help="default batch size")
@@ -100,7 +127,7 @@ def process_command_line_arguments() -> argparse.Namespace:
     parser.add_argument("-wd", "--wd", dest="wd", metavar="wd", default = 0.1,
                         type=float, help="Network Weight Decay")
 
-    parser.add_argument("-e", "--e", dest="epochs", metavar="epochs", default = 64,
+    parser.add_argument("-e", "--e", dest="e", metavar="epochs", default = 64,
                         type=int, help="default num epochs")
 
     parser.add_argument("-id", "--id", dest="in_dest", metavar="in_dest", default = None,

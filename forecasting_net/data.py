@@ -30,7 +30,7 @@ def download_ticker(ticker,read_range):
         ### - Process Data, Extract indicators - ###
         tick.index.names = ['date']
         tick.columns = [col.lower() for col in tick.columns]
-        tick = generate_features(tick).dropna(axis=1)
+        #tick = generate_features(tick).dropna(axis=1)
         return tick
     except Exception:
         pass
@@ -96,5 +96,5 @@ def download_build(to_file):
         pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 if __name__ == '__main__':
-    to_file = 'dataset.pickle'
-    download_build(to_file = 'dataset.pickle')
+    to_file = 'dataset_ohlc.pickle'
+    download_build(to_file = to_file)

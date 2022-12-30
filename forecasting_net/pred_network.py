@@ -204,4 +204,11 @@ class VGG16_AE(nn.Module):
         decoded = self.decoder(encoded, pool_indices)
         return decoded
 
+    def load_model(self, path, device, optim_args):
+        print('... loading checkpoint ...')
+        model = self.load_state_dict(T.load(path, map_location=device)['model'])
+        optim = T.optim.Adam(self.parameters(), *optim_args)
+        optimizer = optim.load_state_dict(T.load(path, map_location=device)['optimizer'])
+        return model, optimizer
+
 

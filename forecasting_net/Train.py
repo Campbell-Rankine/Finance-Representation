@@ -10,6 +10,11 @@ import pickle
 import os
 from constants import *
 from tqdm import tqdm
+import random
+
+### - Bayes Optimization - ###
+from Bayes.Acquisitions import *
+from Bayes.BayesOpt_ import *
 
 ### - Logging - ###
 import tensorboard
@@ -18,6 +23,159 @@ from torch.utils.tensorboard import SummaryWriter
 ### - internal - ###
 from pred_network import *
 from network_utils import *
+
+def PSNR(y_pred, y_true):
+    y_pred = y_pred.numpy().astype(np.float64)
+    y_true = y_true.numpy().astype(np.float64)
+    mse = np.mean((y_pred - y_true)**2)
+    if mse == 0:
+        return float('inf')
+    return 20 * np.log10(255.0 / np.sqrt(mse))
+
+def static_train(args, epochs, device, loss, model, optim, test=None):
+    model.train()
+    databar = tqdm(range(epochs))
+    epoch_losses = []
+
+    ### - Penalty - ###
+    g_pen = 0.
+    penalty = 0.
+    for epoch in databar:
+        ### - Databar Init - ###
+        losses = []
+        databar.set_description('Epoch: %i, Loss: %0.2f, Grad: %0.2f, Regularization Penalty: %.2f, Sample #: %i' % 
+        (epoch, 0., 0., 0., 0))
+        running_loss = 0.0
+        instances = 0
+        
+        ### - iterate through dataset - ###
+        for i, x in enumerate(dataloader):
+            x.requires_grad = True
+            x = x.to(device)
+            #model.zero_grad()
+            optim.zero_grad()
+            out = model(x.detach())
+            loss_ = loss(out, x)
+            try:
+                model.eval()
+                p = T.norm(model.encoder.get_activations_gradient(), 'fro')
+                model.train()
+            except:
+                p = 0.
+            loss_ += p
+            loss_.backward()
+            
+            #losses.append(loss_.item())
+            running_loss += np.abs(loss_.item()) / args.batch
+            
+            databar.set_description('Epoch: %i, Loss: %0.2f, Running Loss: %.2f, Grad Penalty: %e, Sample #: %i' % 
+                                    (epoch, loss_.item(), running_loss, p, i))
+            if args.clip:
+                nn.utils.clip_grad_value_(model.parameters(), clip_value=10.0)
+            optim.step()
+            if args.sched:
+                scheduler.step()
+        epoch_losses.append(np.mean(losses))
+
+    print('Saving Trained Network')
+    check_point = { 'model' : model.state_dict(), 
+                    'optimizer' : optim.state_dict(),
+                    'epoch_losses' : epoch_losses,
+                           }
+    T.save(check_point, 'SM_Representation_Net.pth')
+    print('Done!')
+
+def experiment(model, d_keys, args, epochs, device, loss, optim, test_f=0.1):
+    score = random.sample(dataset, int(test_f*len(d_keys)))
+    static_train(args, epochs, device, loss, model, optim)
+
+    ### - Get output score - ###
+    snrs = []
+    model.eval()
+    for x in score:
+        out = model(x.detach())
+        snrs.append(PSNR(out.detach(), x.detach()))
+    return np.mean(snrs)
+
+def low_cost(model, d_keys, args, epochs, device, loss, optim, test_f=0.1):
+    """
+    TODO:
+        THIS FUNCTION SHOULD ONE RUN EPOCH, TURN THE MODEL TO EVAL, AND RETURN THE MEAN TEST SET SIGNAL TO 
+        NOISE RATIO
+    """
+    score = random.sample(dataset, int(test_f*len(d_keys)))
+    model.train()
+    databar = tqdm(range(epochs))
+    epoch_losses = []
+
+    ### - Penalty - ###
+    g_pen = 0.
+    penalty = 0.
+    for epoch in databar:
+        ### - Databar Init - ###
+        losses = []
+        databar.set_description('Epoch: %i, Loss: %0.2f, Grad: %0.2f, Regularization Penalty: %.2f, Sample #: %i' % 
+        (epoch, 0., 0., 0., 0))
+        running_loss = 0.0
+        instances = 0
+        
+        ### - iterate through dataset - ###
+        for i, x in enumerate(dataloader):
+            x.requires_grad = True
+            x = x.to(device)
+            #model.zero_grad()
+            optim.zero_grad()
+            out = model(x.detach())
+            loss_ = loss(out, x)
+            try:
+                model.eval()
+                p = T.norm(model.encoder.get_activations_gradient(), 'fro')
+                model.train()
+            except:
+                p = 0.
+            loss_ += p
+            loss_.backward()
+            
+            #losses.append(loss_.item())
+            running_loss += np.abs(loss_.item()) / args.batch
+            
+            databar.set_description('Epoch: %i, Loss: %0.2f, Running Loss: %.2f, Grad Penalty: %e, Sample #: %i' % 
+                                    (epoch, loss_.item(), running_loss, p, i))
+            if args.clip:
+                nn.utils.clip_grad_value_(model.parameters(), clip_value=10.0)
+            optim.step()
+            if args.sched:
+                scheduler.step()
+        snrs = []
+        model.eval()
+        for x in score:
+            out = model(x.detach())
+            snrs.append(PSNR(out.detach(), x.detach()))
+        return np.mean(snrs)
+        epoch_losses.append(np.mean(losses))
+
+    print('Saving Trained Network')
+    check_point = { 'model' : model.state_dict(), 
+                    'optimizer' : optim.state_dict(),
+                    'epoch_losses' : epoch_losses,
+                           }
+    T.save(check_point, 'SM_Representation_Net.pth')
+    print('Done!')
+
+def train_self_optimize(args, epochs, device, loss, model, optim):
+    ### - Create bayesian framework - ###
+    obj_func = None
+    if args.bs == 'Experiment':
+        obj_func = experiment
+    elif args.bs == 'Low Cost':
+        obj_func = 2
+    else:
+        print('invalid Bayesian Optimization structure, please input either Experiment or Low Cost')
+        raise ValueError
+    
+    print('build acquisition function of type %s' % args.bs)
+    
+
 
 if __name__ == '__main__':
     args = process_command_line_arguments()
@@ -84,56 +242,5 @@ if __name__ == '__main__':
     scheduler = None
     if args.sched:
         scheduler = T.optim.lr_scheduler.ExponentialLR(optim, 0.9, last_epoch=- 1, verbose=False)
-    model.train()
-    databar = tqdm(range(epochs))
-    epoch_losses = []
-
-    ### - Penalty - ###
-    g_pen = 0.
-    penalty = 0.
-    for epoch in databar:
-        ### - Databar Init - ###
-        losses = []
-        databar.set_description('Epoch: %i, Loss: %0.2f, Grad: %0.2f, Regularization Penalty: %.2f, Sample #: %i' % 
-        (epoch, 0., 0., 0., 0))
-        running_loss = 0.0
-        instances = 0
-        
-        ### - iterate through dataset - ###
-        for i, x in enumerate(dataloader):
-            x.requires_grad = True
-            x = x.to(device)
-            #model.zero_grad()
-            optim.zero_grad()
-            out = model(x.detach())
-            loss_ = loss(out, x)
-            try:
-                model.eval()
-                p = T.norm(model.encoder.get_activations_gradient(), 'fro')
-                model.train()
-            except:
-                p = 0.
-            loss_ += p
-            loss_.backward()
-            
-            #losses.append(loss_.item())
-            running_loss += np.abs(loss_.item()) / args.batch
-            
-            databar.set_description('Epoch: %i, Loss: %0.2f, Running Loss: %.2f, Grad Penalty: %e, Sample #: %i' % 
-                                    (epoch, loss_.item(), running_loss, p, i))
-            if args.clip:
-                nn.utils.clip_grad_value_(model.parameters(), clip_value=10.0)
-            optim.step()
-            if args.sched:
-                scheduler.step()
-        epoch_losses.append(np.mean(losses))
-
-    print('Saving Trained Network')
-    check_point = { 'model' : model.state_dict(), 
-                    'optimizer' : optim.state_dict(),
-                    'epoch_losses' : epoch_losses,
-                           }
-    T.save(check_point, 'SM_Representation_Net.pth')
-    print('Done!')
-
-
+    #TODO: Implement Bayes Training cycle
+    static_train(args, epochs, device, loss, model, optim)
