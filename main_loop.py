@@ -12,6 +12,7 @@ import pandas as pd
 
 from Trader.trade_utils import *
 from Trader.constants import *
+from Trader.networks import *
 from env import *
 from forecasting_net.pred_network import *
 
@@ -44,6 +45,7 @@ if __name__ == '__main__':
     print('Begin Training')
     device = T.device("cuda:0" if T.cuda.is_available() else "cpu")
     args = process_command_line_arguments_()
+
     ### - network args - ###
     lr = args.lr
     alpha = args.a
@@ -56,8 +58,8 @@ if __name__ == '__main__':
     h2 = args.h2
     cp = args.cp
 
-    names = ['decision_actor', 'decision_critic', 'target_actor', 'target_critic']
-
+    #names = ['decision_actor', 'decision_critic', 'target_actor', 'target_critic']
+    
     ### - Get dataset as numpy array, convert using ray core API - ###
     dataset = load_dataset(dataset_path)
     print('Building Dataset')
@@ -69,24 +71,41 @@ if __name__ == '__main__':
     model, optimizer = load_context(context_path, args, (6,331), device)
     print('Done')
 
-    ### - Create Agent - ###
-    #TODO: Implement
-
     ### - env args - ###
     initial_fund = args.initial
     trade_price = args.tp
-    print(dataset[0].shape)
-    dims=dataset[0].shape
-    num_tickers = len(dataset)
+    num_tickers = dataset.shape[1]
     max_hold = args.mh
-    max_stock_value = 10*np.max(dataset)
+    
     window = args.w
     iters = args.iters
     tol = args.tol
 
-    ### - env - ###
-    env = PreTrainEnv()#TODO: args, do correctly
-    env.reset()
+    ### - Create Agent - ###
+    trader = Agent(alpha, beta, lr, dataset.shape, tau, '~/tmp/checkpoint', 's&ptrader')
 
-    ### - Train Loop - ###
-    #TODO: Implement
+    ### - env - ###
+    env = PreTrainEnv(initial_fund, trade_price, num_tickers, max_hold, max_stock_value, 
+                      window, iters, dataset, tol, trader)
+
+    print('--------------- Begin Training ---------------')
+    np.random.seed(0)
+    score_history = []
+    for i in range(int(iters)):
+        obs = env.reset()
+        done = False
+        score = 0
+        while not done:
+            act = trader.choose_action(obs)
+            new_state, reward, done, info = env.step(act)
+            trader.remember(obs, act, reward, new_state, int(done))
+            trader.learn()
+            score += reward
+            obs = new_state
+        score_history.append(score)
+        print('episode ', i, 'score %.2f' % score,
+          'trailing 100 games avg %.3f' % np.mean(score_history[-100:]))
+        if i % 100 == 0:
+            trader.save_models()
+
+    print('Done Training')

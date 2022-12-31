@@ -21,7 +21,7 @@ from collections import deque
 from Trader.trade_utils import plot_mem
 
 class PreTrainEnv(Env):
-    def __init__(self, initial_fund, trade_price, dims, num_tickers, max_hold, max_stock_value, window, _iters_, dataset,
+    def __init__(self, initial_fund, trade_price, num_tickers, max_hold, max_stock_value, window, _iters_, dataset,
                 tolerance, agent):
         super(PreTrainEnv, self).__init__()
 
@@ -35,9 +35,8 @@ class PreTrainEnv(Env):
         self.num_tickers = num_tickers
 
         ### - Shape - ###
-        self.dims = dims
         self.window = window
-        assert(self.window < (self.dims[-1]/6))
+        self.dims = (self.agent.obs_size, self.window)
 
         ### - Environment Attributes - ###
         self.timestep = 0
@@ -72,13 +71,15 @@ class PreTrainEnv(Env):
         return spaces.Box(low=np.zeros_like(self.dims), high=self.max_price*np.ones_like(self.dims), dtype=np.float32)
     
     def _get_observation(self):
-        return self.data[:][:][self.timestep, min(self.timestep+self.window, self.dims[-1])]
+        obs = self.data[:][-max(0, (self.timestep - self.window)):-self.timestep]
+        print(obs)
+        return obs
     
     def _get_current_prices(self):
         """
         For the sake of adding noise sample a random price from somewhere within the [t - tolerance, t + tolerance] range
         """
-        return np.random.uniform(self.data[:][:][max(self.timestep - self.tolerance, 0), min(self.timestep + self.tolerance, 0)])
+        return np.random.sample(self.data[:][:][max(self.timestep - self.tolerance, 0):min(self.timestep + self.tolerance, 0)])
 
     def _reward(self):
         curr_worth = self.holdings @ self.current_prices
@@ -96,7 +97,7 @@ class PreTrainEnv(Env):
         #get reward and done flag
         worth = self._reward()
         self.prev_reward = self._reward()
-        done = worth <= 0 or self.available_funds < 0
+        done = worth <= 0 or self.available_funds < 0 or self.timestep > len(self.data)
 
         #next observation
         obs = self._get_observation()
@@ -110,12 +111,11 @@ class PreTrainEnv(Env):
         self.current_prices = np.zeros(self.num_tickers)
         self.available_funds = self.initial
         self.timestep = self.time_init #TODO: add random timestep init
-        self.data = np.zeros_like(self.dims)
 
         ### - first obs - ###
         obs = self._get_observation()
 
-        self.agent.reset()
+        #self.agent.reset()
         return obs
 
     def render(self, mode='human', close=False):
@@ -124,8 +124,8 @@ class PreTrainEnv(Env):
         print()
         print('Reward: %.2f' % self.prev_reward)
         print('Available Funds: %.2f' % self.available_funds)
-        print('-----------------------------')
+        print('-----------------------------\n')
 
         self.storage.add(self.net_change)
-        t_x = sns.scatterplot(list(self.storage.storage), cmap=sns.color_palette("magma", as_cmap=True))
+        t_x = sns.scatterplot(list(range(self.timestep)), list(self.storage.storage), cmap=sns.color_palette("magma", as_cmap=True))
         plt.savefig(fname='Tmp/change_at_' + str(self.timestep) + '.png')

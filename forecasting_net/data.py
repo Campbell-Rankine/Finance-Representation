@@ -38,7 +38,7 @@ def download_ticker(ticker,read_range):
 def build_dataset_serial(debug):
     tickers = si.tickers_sp500()
 
-    read_range = ['2022-11-1','2021-7-12']
+    read_range = ['2022-11-1','2019-7-12']
 
     print('build dataset')
     write = defaultdict([])
@@ -58,7 +58,7 @@ def build_dataset_serial(debug):
 def build_dataset(tickers, debug):
     ### - Save Info TODO: Add to args - ###
     ### - TODO: remove Ray and try and code properly from scratch, then reinsert Ray code - ###
-    read_range = ['2022-11-1','2021-7-12']
+    read_range = ['2022-11-1','2019-7-12']
 
     ### - Init Ray - ###
     print("init ray")
@@ -96,5 +96,5 @@ def download_build(to_file):
         pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 if __name__ == '__main__':
-    to_file = 'dataset_ohlc.pickle'
+    to_file = 'dataset_long_ohlc.pickle'
     download_build(to_file = to_file)

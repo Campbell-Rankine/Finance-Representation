@@ -2,7 +2,7 @@ import torch as T
 import torch.nn as nn
 import torch.nn.functional as F
 
-from trade_utils import *
+from Trader.trade_utils import *
 
 import os
 import ray
@@ -20,25 +20,31 @@ class Actor(nn.Module):
         self.tau = tau
         self.lr = lr
         self.cp_save = os.path.join(cp, name)
+        self.name = name
 
         ### - Network Modules - ###
         self.activation = nn.LeakyReLU()
 
         self.fc1 = nn.Linear(self.obs_size, h1)
-        self.f1 = 1./np.sqrt(self.fc1.weight.data.size()[0])
-        T.nn.init.uniform_(self.fc1, -self.f1, self.f1)
+        f1 = 1./np.sqrt(self.fc1.weight.data.size()[0])
+        nn.init.uniform_(self.fc1.weight, -f1, f1)
 
         self.ln1 = nn.LayerNorm(h1)
 
         self.fc2 = nn.Linear(h1, h2)
-        self.f2 = 1./np.sqrt(self.fc2.weight.data.size()[0])
-        T.nn.init.uniform_(self.fc2, -self.f2, self.f2)
+        f2 = 1./np.sqrt(self.fc2.weight.data.size()[0])
+        nn.init.uniform_(self.fc2.weight, -f2, f2)
 
         self.ln2 = nn.LayerNorm(h2)
 
         self.mu = nn.Linear(h2, self.action_size)
-        self.f3 = 0.003
-        T.nn.init.uniform_(self.mu, -self.f3, self.f3)
+        f3 = 0.003
+        nn.init.uniform_(self.mu.weight, -f3, f3)
+
+        print('Weight init sample range for %s:' % self.name)
+        print('-------------------------------------------------')
+        print('L1: U(%.3f, %.3f), L2: U(%.3f, %.3f), Mu: U(%.3f, %.3f)' % (-f1, f1, -f2, f2, -f3, f3))
+        print()
 
         self.optim = T.optim.Adam(self.parameters(), lr=lr, betas=betas)
         self.device = device
@@ -63,7 +69,7 @@ class Actor(nn.Module):
 
 class Critic(nn.Module):
     def __init__(self, h1, h2, obs_size, action_size, batch_size, w_decay, tau, betas, lr, cp, name, device):
-        super(Actor, self).__init__()
+        super(Critic, self).__init__()
         
         ### - Attributes - ###
         self.obs_size = obs_size
@@ -73,25 +79,31 @@ class Critic(nn.Module):
         self.lr = lr
         self.cp_save = os.path.join(cp, name)
         self.w_decay = w_decay
+        self.name = name
 
         ### - Network Modules - ###
         self.activation = nn.LeakyReLU()
 
         self.fc1 = nn.Linear(self.obs_size, h1)
-        self.f1 = 1./np.sqrt(self.fc1.weight.data.size()[0])
-        T.nn.init.uniform_(self.fc1, -self.f1, self.f1)
+        f1 = 1./np.sqrt(self.fc1.weight.data.size()[0])
+        nn.init.uniform_(self.fc1.weight, -f1, f1)
 
         self.ln1 = nn.LayerNorm(h1)
 
         self.fc2 = nn.Linear(h1, h2)
-        self.f2 = 1./np.sqrt(self.fc2.weight.data.size()[0])
-        T.nn.init.uniform_(self.fc2, -self.f2, self.f2)
+        f2 = 1./np.sqrt(self.fc2.weight.data.size()[0])
+        nn.init.uniform_(self.fc2.weight, -f2, f2)
 
         self.ln2 = nn.LayerNorm(h2)
 
         self.q = nn.Linear(h2, 1)
-        self.f3 = 0.003
-        T.nn.init.uniform_(self.q, -self.q, self.q)
+        f3 = 0.003
+        nn.init.uniform_(self.q.weight, -f3, f3)
+
+        print('Weight init sample range for %s:' % self.name)
+        print('-------------------------------------------------')
+        print('L1: U(%.3f, %.3f), L2: U(%.3f, %.3f), Q: U(%.3f, %.3f)' % (-f1, f1, -f2, f2, -f3, f3))
+        print()
 
         self.av = nn.Linear(h2, self.action_size)
 
@@ -119,18 +131,19 @@ class Critic(nn.Module):
         self.load_state_dict(T.load(self.cp_save))
 
 ### - DEFINE AGENT - ###
-from buffer import *
+from Trader.buffer import *
 class Agent(nn.Module):
-    def __init__(self, alpha, beta, lr, dims, tau, env, cp, name, gamma=0.99, num_actions=3, max_size=1000000, h1=400,
+    def __init__(self, alpha, beta, lr, dims, tau, cp, name, gamma=0.99, num_actions=3, obs_size=6,  max_size=1000000, h1=400,
                  h2=500, batch_size=64, w_decay=0.1):
+        super(Agent, self).__init__()
         ### - ATTRIBUTES - ###
         self.lr = lr
         self.alpha = alpha
         self.beta = beta
         self.dims = dims
         self.tau = tau
-        self.env = env
         self.gamma = gamma
+        self.obs_size = dims[1]
         self.num_actions = num_actions
         self.max_size = max_size
         self.h1 = h1
@@ -144,19 +157,21 @@ class Agent(nn.Module):
         ### - Network Inits - ###
         self.memory = ReplayBuffer(self.max_size)
 
-        self.actor = Actor(self.h1, self.h2, self.dims, self.num_actions, self.batch_size, self.tau, self.alpha, 
-                           self.lr, self.cp, self.name, self.device)
+        self.actor = Actor(self.h1, self.h2, self.obs_size, self.num_actions, self.batch_size, self.tau, self.alpha, 
+                           self.lr, self.cp, self.name + '_actor', self.device)
         
-        self.critic = Critic(self.h1, self.h2, self.dims, self.num_actions, self.batch_size, self.weight_decay, self.tau, self.alpha, 
-                           self.lr, self.cp, self.name, self.device)
+        self.critic = Critic(self.h1, self.h2, self.obs_size, self.num_actions, self.batch_size, self.weight_decay, self.tau, self.beta, 
+                           self.lr, self.cp, self.name + '_critic', self.device)
         
-        self.t_actor = Actor(self.h1, self.h2, self.dims, self.num_actions, self.batch_size, self.tau, self.alpha, 
-                           self.lr, self.cp, self.name, self.device)
+        self.target_actor = Actor(self.h1, self.h2, self.obs_size, self.num_actions, self.batch_size, self.tau, self.alpha, 
+                           self.lr, self.cp, self.name + '_target_actor', self.device)
         
-        self.t_critic = Critic(self.h1, self.h2, self.dims, self.num_actions, self.batch_size, self.weight_decay, self.tau, self.alpha, 
-                           self.lr, self.cp, self.name, self.device)
+        self.target_critic = Critic(self.h1, self.h2, self.obs_size, self.num_actions, self.batch_size, self.weight_decay, self.tau, self.beta, 
+                           self.lr, self.cp, self.name + '_target_critic', self.device)
         
         self.noise = OrnsteinUhlenbeckActionNoise(self.num_actions)
+
+        self.storage = plot_mem(50)
 
         self.update_(tau=1.)
 
@@ -189,9 +204,11 @@ class Agent(nn.Module):
 
     def choose_action(self, observation):
         self.actor.eval()
-        observation = T.tensor(observation, dtype=T.float).to(self.actor.device)
-        mu = self.actor.forward(observation).to(self.actor.device)
-        mu_prime = mu + T.tensor(self.noise.sample(),
+        observation = T.tensor(observation, dtype=T.float)
+        mu = self.actor.forward(observation)
+        sample = self.noise.sample()
+        self.storage.add(sample)
+        mu_prime = mu + T.tensor(sample,
                                  dtype=T.float).to(self.actor.device)
         self.actor.train()
         return mu_prime.cpu().detach().numpy()
@@ -246,9 +263,6 @@ class Agent(nn.Module):
 
 
     ### - Helpers - ###
-    def reset(self):
-        self.memory.reset()
-        self.noise.reset()
 
     def save_models(self):
         self.actor.save_checkpoint()

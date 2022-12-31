@@ -176,7 +176,6 @@ def train_self_optimize(args, epochs, device, loss, model, optim):
     print('build acquisition function of type %s' % args.bs)
     
 
-
 if __name__ == '__main__':
     args = process_command_line_arguments()
     #if args.log:

@@ -13,13 +13,18 @@ def process(key, raw_data: dict):
     #try:
     item = item.drop('ticker', axis=1)
     #except :
-    return item.values
+    return item
 
 def build_dataset(raw_data: dict):
     keys = list(raw_data.keys())
     ids = [process.remote(key, raw_data) for key in keys]
-    data = ray.get(ids)
-    return np.array(data)
+    data_ = ray.get(ids)
+    data = np.array(data_[0])
+    for x in data_[1:]:
+        if x.shape[0] == data.shape[0]:
+            data = np.hstack((data, x))
+    print(data.shape)
+    return data
     
 def load_dataset(file):
     with open(file, 'rb') as f:
@@ -112,11 +117,11 @@ def process_command_line_arguments_() -> argparse.Namespace:
     parser.add_argument("-lr", "--lr", dest="lr", metavar="lr", default = 0.1,
                         type=float, help="default learning rate")
     
-    parser.add_argument("-a", "--a", dest="a", metavar="a", default = 0.99,
-                        type=float, help="Network alphas")
+    parser.add_argument("-a", "--a", dest="a", metavar="a", default = (0.000025, 0.99),
+                        type=tuple, help="Network alphas")
 
-    parser.add_argument("-b", "--b", dest="b", metavar="b", default = 0.99,
-                        type=float, help="Network Betas")
+    parser.add_argument("-b", "--b", dest="b", metavar="b", default = (0.00025, 0.99),
+                        type=tuple, help="Network Betas")
 
     parser.add_argument("-g", "--g", dest="g", metavar="g", default = 0.99,
                         type=float, help="Network Gamma")
