@@ -31,7 +31,7 @@ class PreTrainEnv(Env):
         self.trade_price = trade_price
         self.data = dataset #(DATASET FORMAT, self.dims = (num_tickers, num_features, num_samples))
 
-        self.time_init = 0
+        self.time_init = 1
         self.num_tickers = num_tickers
 
         ### - Shape - ###
@@ -79,7 +79,9 @@ class PreTrainEnv(Env):
         """
         For the sake of adding noise sample a random price from somewhere within the [t - tolerance, t + tolerance] range
         """
-        return np.random.sample(self.data[:][:][max(self.timestep - self.tolerance, 0):min(self.timestep + self.tolerance, 0)])
+        obs = self._get_observation()
+        pricing = obs['close']
+        return np.random.sample(pricing[self.tol:-self.tol])
 
     def _reward(self):
         curr_worth = self.holdings @ self.current_prices

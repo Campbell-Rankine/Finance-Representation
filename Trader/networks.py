@@ -209,7 +209,7 @@ class Agent(nn.Module):
         sample = self.noise.sample()
         self.storage.add(sample)
         mu_prime = mu + T.tensor(sample,
-                                 dtype=T.float).to(self.actor.device)
+                                 dtype=T.float)
         self.actor.train()
         return mu_prime.cpu().detach().numpy()
 
