@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 from gym import spaces
+import random
 
 ### - internal libraries - ###
 from forecasting_net.utils import *
@@ -31,7 +32,7 @@ class PreTrainEnv(Env):
         self.trade_price = trade_price
         self.data = dataset #(DATASET FORMAT, self.dims = (num_tickers, num_features, num_samples))
 
-        self.time_init = 1
+        self.time_init = window + 1
         self.num_tickers = num_tickers
 
         ### - Shape - ###
@@ -71,21 +72,25 @@ class PreTrainEnv(Env):
         return spaces.Box(low=np.zeros_like(self.dims), high=self.max_price*np.ones_like(self.dims), dtype=np.float32)
     
     def _get_observation(self):
-        obs = self.data[:][-max(0, (self.timestep - self.window)):-self.timestep]
-        print(obs)
+        obs = self.data[max(0, (self.timestep - self.window)):self.timestep]
         return obs
     
-    def _get_current_prices(self):
+    def _get_current_prices(self, obs):
         """
         For the sake of adding noise sample a random price from somewhere within the [t - tolerance, t + tolerance] range
+
         """
-        obs = self._get_observation()
-        pricing = obs['close']
-        return np.random.sample(pricing[self.tol:-self.tol])
+        indices = list(range(6, self.data.shape[1], 6))
+        t_ind = np.random.randint(max(self.timestep - self.tolerance, 0), min(self.timestep + self.tolerance, obs.shape[0]))
+        pricing = np.array([x[indices] for x in obs])
+        print(pricing.shape)
+        return pricing[t_ind]
 
     def _reward(self):
-        curr_worth = self.holdings @ self.current_prices
-        self.net_change = curr_worth - self.initial
+        print(self.holdings.shape, self.current_prices.shape)
+        worth = self.holdings @ self.current_prices
+        i_worth = self.initial @ self.current_prices
+        self.net_change = worth - i_worth
         #TODO: Risk balancing, fund management, etc.
         time_pen = self.timestep / self.MAX_ITERS
         return self.net_change * time_pen
@@ -93,7 +98,6 @@ class PreTrainEnv(Env):
     def step(self, action):
         #update for reward
         self.holdings = action
-        self.current_prices = self._get_current_prices()
         self.timestep += 1
 
         #get reward and done flag
@@ -103,6 +107,7 @@ class PreTrainEnv(Env):
 
         #next observation
         obs = self._get_observation()
+        self.current_prices = self._get_current_prices(obs)
 
         return obs, worth, done, {}
 
@@ -110,13 +115,12 @@ class PreTrainEnv(Env):
     def reset(self):
         ### - Resets - ###
         self.holdings = np.zeros(self.num_tickers)
-        self.current_prices = np.zeros(self.num_tickers)
         self.available_funds = self.initial
         self.timestep = self.time_init #TODO: add random timestep init
 
         ### - first obs - ###
         obs = self._get_observation()
-
+        self.current_prices = self._get_current_prices(obs)
         #self.agent.reset()
         return obs
 
@@ -131,3 +135,18 @@ class PreTrainEnv(Env):
         self.storage.add(self.net_change)
         t_x = sns.scatterplot(list(range(self.timestep)), list(self.storage.storage), cmap=sns.color_palette("magma", as_cmap=True))
         plt.savefig(fname='Tmp/change_at_' + str(self.timestep) + '.png')
+
+
+"""
+SUGGESTIONS:
+    1) Probably need a better rendering function, something that more accurately, and visually displays the model
+    decision making process. Maybe take the train functions from GANS that produce GIFS?
+
+    2) Need to play around with reward functions that factor in some kind of 'risk' dampener, It's up to you to
+    research how risk is defined in your setting, but lets maybe make that some kind of control setting in the
+    final deployment
+
+    3) would be nice to output Gradients and network penalties to visualize learning so have a look for how you can do that
+
+    4) CPU paralellize the RUN and TRAIN functions when theyre working
+"""

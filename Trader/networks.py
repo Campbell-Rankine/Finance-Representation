@@ -57,7 +57,11 @@ class Actor(nn.Module):
         x = self.ln2(x)
         x = self.activation(x)
         x = T.tanh(self.mu(x))
-        return x
+        print(x.shape)
+        return x.mean(0)
+    
+    # EVENTUALLY YOUR ENCODER SHOULD TAKE THE INPUT FOR STATE, TRY TO DESCRIBE MARKET HEALTH
+    #TODO: Make the autoencoder follow the same structure 
 
     def save_checkpoint(self):
         print('... saving checkpoint ...')
@@ -133,7 +137,7 @@ class Critic(nn.Module):
 ### - DEFINE AGENT - ###
 from Trader.buffer import *
 class Agent(nn.Module):
-    def __init__(self, alpha, beta, lr, dims, tau, cp, name, gamma=0.99, num_actions=3, obs_size=6,  max_size=1000000, h1=400,
+    def __init__(self, alpha, beta, lr, dims, tau, cp, name, gamma=0.99, num_actions=138, obs_size=6,  max_size=1000000, h1=400,
                  h2=500, batch_size=64, w_decay=0.1):
         super(Agent, self).__init__()
         ### - ATTRIBUTES - ###
@@ -143,7 +147,7 @@ class Agent(nn.Module):
         self.dims = dims
         self.tau = tau
         self.gamma = gamma
-        self.obs_size = dims[1]
+        self.obs_size = 834
         self.num_actions = num_actions
         self.max_size = max_size
         self.h1 = h1
@@ -155,7 +159,7 @@ class Agent(nn.Module):
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cuda:1')
 
         ### - Network Inits - ###
-        self.memory = ReplayBuffer(self.max_size)
+        self.memory = ReplayBuffer(self.max_size, (30,834), num_actions)
 
         self.actor = Actor(self.h1, self.h2, self.obs_size, self.num_actions, self.batch_size, self.tau, self.alpha, 
                            self.lr, self.cp, self.name + '_actor', self.device)
@@ -206,7 +210,9 @@ class Agent(nn.Module):
         self.actor.eval()
         observation = T.tensor(observation, dtype=T.float)
         mu = self.actor.forward(observation)
+        print(mu.shape)
         sample = self.noise.sample()
+        print(sample.shape)
         self.storage.add(sample)
         mu_prime = mu + T.tensor(sample,
                                  dtype=T.float)
@@ -214,13 +220,13 @@ class Agent(nn.Module):
         return mu_prime.cpu().detach().numpy()
 
     def remember(self, state, action, reward, new_state, done):
-        self.memory.add((state, action, reward, new_state, done))
+        self.memory.add(state, action, reward, new_state, done)
 
     def learn(self):
-        if self.memory.mem_cntr < self.batch_size:
+        if self.memory.size() < self.batch_size:
             return
         state, action, reward, new_state, done = \
-                                      self.memory.sample_buffer(self.batch_size)
+                                      self.memory.sample(self.obs_size)
 
         reward = T.tensor(reward, dtype=T.float).to(self.critic.device)
         done = T.tensor(done).to(self.critic.device)
@@ -291,3 +297,6 @@ class Agent(nn.Module):
         for param in current_critic_dict:
             print(param, T.equal(original_critic_dict[param], current_critic_dict[param]))
         input()
+
+
+#FTranspose input

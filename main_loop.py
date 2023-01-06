@@ -72,9 +72,9 @@ if __name__ == '__main__':
     print('Done')
 
     ### - env args - ###
-    initial_fund = args.initial
     trade_price = args.tp
-    num_tickers = dataset.shape[1]
+    print(dataset.shape)
+    num_tickers = int(dataset.shape[0] / 6) - 1
     max_hold = args.mh
     
     window = args.w
@@ -96,6 +96,7 @@ if __name__ == '__main__':
         done = False
         score = 0
         while not done:
+            print(i)
             act = trader.choose_action(obs)
             new_state, reward, done, info = env.step(act)
             trader.remember(obs, act, reward, new_state, int(done))

@@ -307,44 +307,34 @@ class StockData(Dataset):
         ### - Get total Dataset - ###
         self.data = load_dataset(file=file_address)
         self.keys = list(self.data.keys())
+        self.prep_data()
 
         ### - Attributes - ###
         self.dir = file_address
         self.transform = transform
         self.device = device
     
+    def prep_data(self):
+        data_ = [self.data[key].drop('ticker', axis=1) for key in self.keys]
+        self.data = np.array(data_[0])
+        shape = self.data.shape
+        for x in data_[1:]:
+            
+            if x.shape[0] == shape[0]:
+                self.data = np.hstack((self.data, x))
+        self.data = self.data.T
+        self.data = self.data.astype(np.float32)
+
     def __len__(self):
-        return len(self.keys)
+        return len(self.data)
 
     def features(self):
-        ex = self.data[self.keys[0]]
-        return ex.shape[1]
+        return self.data.shape[1]
 
     def __getitem__(self, index):
         ### - Get Pandas df - ###
-        key = self.keys[index]
-        X = self.data[key]
-        
-        ### - Transform to model input - ###
-        try:
-            X = X.to_numpy().astype(np.float32)
-
-            start_ = len(X)-(self.window + self.spacing)
-            end_ = len(X) - self.spacing
-
-            X = X[start_: end_, :]
-            return T.tensor(X)
-        except TypeError:
-            print('invalid DataFrame at %s. Returning next index' % (self.keys[index]))
-            key = self.keys[index+1]
-            X = self.data[key]
-            X = X.to_numpy().astype(np.float32)
-
-            start_ = len(X)-(self.window + self.spacing)
-            end_ = len(X) - self.spacing
-
-            X = X[start_: end_, :]
-            return T.tensor(X)
+        obs = self.data[max(0, (index - self.window)):index]
+        return obs
 
 def get_loss_fn(lossarg: str) -> callable:
     if lossarg == 'BCE':

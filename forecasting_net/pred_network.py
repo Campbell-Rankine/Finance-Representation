@@ -8,7 +8,7 @@ import torchvision.models as models
 
 import ray
 from tqdm import tqdm
-from forecasting_net.network_utils import *
+from network_utils import *
 
 class Encoder(nn.Module):
 

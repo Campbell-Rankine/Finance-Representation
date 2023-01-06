@@ -219,7 +219,7 @@ if __name__ == '__main__':
     transform = transforms.Compose([transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
     dataset = StockData(dataset_p_, 128, device, transform=transform)
-    dataloader = DataLoader(dataset, batch_size=args.batch, shuffle=True, num_workers=args.dw)
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=args.dw)
 
     num_features = dataset.features()
     dims = dataset[0].shape

@@ -24,7 +24,7 @@ def build_dataset(raw_data: dict):
         if x.shape[0] == data.shape[0]:
             data = np.hstack((data, x))
     print(data.shape)
-    return data
+    return data.T
     
 def load_dataset(file):
     with open(file, 'rb') as f:
@@ -98,7 +98,7 @@ def process_command_line_arguments_() -> argparse.Namespace:
     parser.add_argument("-iters", "--iters", dest="iters", metavar="iters", default = 1e9,
                         type=int, help="Max iterations pre epoch")
 
-    parser.add_argument("-tol", "--tol", dest="tol", metavar="tol", default = 3,
+    parser.add_argument("-tol", "--tol", dest="tol", metavar="tol", default = 7,
                         type=int, help="Pricing tolerance for generating random pricing")
 
     parser.add_argument("-cp", "--cp", dest="cp", metavar="cp", default = '/tmp/cp',
