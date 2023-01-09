@@ -251,7 +251,7 @@ def process_command_line_arguments() -> argparse.Namespace:
     parser.add_argument("-latent", "--latent", dest="latent", metavar="latent", default = 2048,
                         type=int, help="latent size")
 
-    parser.add_argument("-window", "--window", dest="window", metavar="window", default = 120,
+    parser.add_argument("-window", "--window", dest="window", metavar="window", default = 30,
                         type=int, help="default window training size")
 
     parser.add_argument("-batch", "--batch", dest="batch", metavar="batch", default = 4,

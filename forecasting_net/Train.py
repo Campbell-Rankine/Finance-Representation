@@ -51,11 +51,18 @@ def static_train(args, epochs, device, loss, model, optim, test=None):
         ### - iterate through dataset - ###
         for i, x in enumerate(dataloader):
             x.requires_grad = True
+            if x.shape[1] < args.window:
+                continue
             x = x.to(device)
             #model.zero_grad()
             optim.zero_grad()
             out = model(x.detach())
-            loss_ = loss(out, x)
+            try:
+                
+                loss_ = loss(out, x)
+            except ValueError:
+              print('invalid input')
+              continue
             try:
                 model.eval()
                 p = T.norm(model.encoder.get_activations_gradient(), 'fro')
@@ -218,7 +225,7 @@ if __name__ == '__main__':
 
     transform = transforms.Compose([transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-    dataset = StockData(dataset_p_, 128, device, transform=transform)
+    dataset = StockData(dataset_p_, 30, device, transform=transform)
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=args.dw)
 
     num_features = dataset.features()

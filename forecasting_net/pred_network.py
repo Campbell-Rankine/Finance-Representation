@@ -39,7 +39,9 @@ class Encoder(nn.Module):
 
         ### - 512 Dimensional output representation vector - ###
         del self.encoder.classifier
-        self.encoder.avgpool = nn.AdaptiveAvgPool2d(output_size=(latent, 1))
+        self.encoder.avgpool = nn.AdaptiveAvgPool2d(output_size=1)
+        self.conv_ = nn.Conv2d(512, latent, 2, 1)
+        #self.encoder.Lin = nn.Linear(1024,128)
 
         self.encoder = self._encodify_(self.encoder)
 
@@ -120,7 +122,8 @@ class Encoder(nn.Module):
                 modules.append(module_add)
             else:
                 modules.append(module)
-
+        modules.append(self.conv_)
+        #modules.append(self.encoder.Lin)
         return modules
 
 def invert_encoder(encoder):
@@ -163,7 +166,7 @@ class Decoder(nn.Module):
         self.decoder = invert_encoder(encoder.encoder)
         self.in_channels = encoder.out_channels
         self.out_channels = encoder.in_channels
-        self.convert = output_transform(3, 1, encoder.dims)
+        self.convert = output_transform(3, 1, (30,834))
         self.activation = nn.Sigmoid()
 
     def forward(self, x, pool_indices):
