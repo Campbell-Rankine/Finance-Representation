@@ -21,8 +21,21 @@ import tensorboard
 from torch.utils.tensorboard import SummaryWriter
 
 ### - internal - ###
-from pred_network import *
-from network_utils import *
+from forecasting_net.pred_network import *
+from forecasting_net.network_utils import *
+
+"""
+Add stratified K means training structure and also bayesopt training cycle
+
+These can come after the RL agent training loop works though
+"""
+
+def training_wrapper(bayes, args, epochs, device, loss, model, optim, test=None):
+    """
+    wrapper function to define and call training structure
+    """
+    test_scoring = PSNR
+    assert(callable(test_scoring))
 
 def PSNR(y_pred, y_true):
     y_pred = y_pred.numpy().astype(np.float64)
@@ -32,7 +45,7 @@ def PSNR(y_pred, y_true):
         return float('inf')
     return 20 * np.log10(255.0 / np.sqrt(mse))
 
-def static_train(args, epochs, device, loss, model, optim, test=None):
+def static_train(args, epochs, device, loss, model, optim, test=0.1):
     model.train()
     databar = tqdm(range(epochs))
     epoch_losses = []
@@ -40,6 +53,7 @@ def static_train(args, epochs, device, loss, model, optim, test=None):
     ### - Penalty - ###
     g_pen = 0.
     penalty = 0.
+    testing = []
     for epoch in databar:
         ### - Databar Init - ###
         losses = []
@@ -58,12 +72,7 @@ def static_train(args, epochs, device, loss, model, optim, test=None):
             optim.zero_grad()
             out = model(x.detach())
             try:
-                
                 loss_ = loss(out, x)
-            except ValueError:
-              print('invalid input')
-              continue
-            try:
                 model.eval()
                 p = T.norm(model.encoder.get_activations_gradient(), 'fro')
                 model.train()

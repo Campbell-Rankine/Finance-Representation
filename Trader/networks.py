@@ -19,6 +19,7 @@ class Actor(nn.Module):
         self.batch_size = batch_size
         self.tau = tau
         self.lr = lr
+        self.cp = cp
         self.cp_save = os.path.join(cp, name)
         self.name = name
 
@@ -65,11 +66,18 @@ class Actor(nn.Module):
 
     def save_checkpoint(self):
         print('... saving checkpoint ...')
-        T.save(self.state_dict(), self.cp_save)
+        try:
+            T.save(self.state_dict(), self.cp_save)
+        except RuntimeError:
+            os.mkdir(self.cp)
+            T.save(self.state_dict(), self.cp_save + '.pth')
 
     def load_checkpoint(self):
         print('... loading checkpoint ...')
-        self.load_state_dict(T.load(self.cp_save))
+        try:
+            self.load_state_dict(T.load(self.cp_save + '.pth'))
+        except Exception:
+            print('path does not exist!')
 
 class Critic(nn.Module):
     def __init__(self, h1, h2, obs_size, action_size, batch_size, w_decay, tau, betas, lr, cp, name, device):
@@ -81,6 +89,7 @@ class Critic(nn.Module):
         self.batch_size = batch_size
         self.tau = tau
         self.lr = lr
+        self.cp = cp
         self.cp_save = os.path.join(cp, name)
         self.w_decay = w_decay
         self.name = name
@@ -128,11 +137,18 @@ class Critic(nn.Module):
 
     def save_checkpoint(self):
         print('... saving checkpoint ...')
-        T.save(self.state_dict(), self.cp_save)
+        try:
+            T.save(self.state_dict(), self.cp_save)
+        except RuntimeError:
+            os.mkdir(self.cp)
+            T.save(self.state_dict(), self.cp_save + '.pth')
 
     def load_checkpoint(self):
         print('... loading checkpoint ...')
-        self.load_state_dict(T.load(self.cp_save))
+        try:
+            self.load_state_dict(T.load(self.cp_save + '.pth'))
+        except Exception:
+            print('path does not exist!')
 
 ### - DEFINE AGENT - ###
 from Trader.buffer import *
@@ -223,16 +239,16 @@ class Agent(nn.Module):
         self.memory.add(state, action, reward, new_state, done)
 
     def learn(self):
-        if self.memory.size() < self.batch_size:
+        if self.memory.mem_cntr < self.batch_size:
             return
         state, action, reward, new_state, done = \
                                       self.memory.sample(self.obs_size)
 
-        reward = T.tensor(reward, dtype=T.float).to(self.critic.device)
-        done = T.tensor(done).to(self.critic.device)
-        new_state = T.tensor(new_state, dtype=T.float).to(self.critic.device)
-        action = T.tensor(action, dtype=T.float).to(self.critic.device)
-        state = T.tensor(state, dtype=T.float).to(self.critic.device)
+        reward = T.tensor(reward, dtype=T.float)#.to(self.critic.device)
+        done = T.tensor(done)#.to(self.critic.device)
+        new_state = T.tensor(new_state, dtype=T.float)#.to(self.critic.device)
+        action = T.tensor(action, dtype=T.float)#.to(self.critic.device)
+        state = T.tensor(state, dtype=T.float)#.to(self.critic.device)
 
         ### - CPU parallel - ###
         self.target_actor.eval()
@@ -246,7 +262,7 @@ class Agent(nn.Module):
         target = []
         for j in range(self.batch_size):
             target.append(reward[j] + self.gamma*critic_value_[j]*done[j])
-        target = T.tensor(target).to(self.critic.device)
+        target = T.tensor(target)#.to(self.critic.device)
         target = target.view(self.batch_size, 1)
         
         ### - Optimize Section: Can also be run in parallel - ###

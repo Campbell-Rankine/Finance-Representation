@@ -24,7 +24,7 @@ def data_context_input_transform(x):
                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     return transform(x)
 
-def load_context(path_to_weights, args, dims, device):
+def load_context(path_to_weights, args, dims, device, pre=False):
     """
     Load Pretrained context vector AutoEncoder
 
@@ -35,7 +35,11 @@ def load_context(path_to_weights, args, dims, device):
                     'dims': dims}
     decoder_args = {}
     model = VGG16_AE(encoder_args, decoder_args, device)
-    model, optimizer = model.load_model(path_to_weights, device, optim_args)
+    optim_args = (lr, (0, 0.99))
+    if pre:
+        model, optimizer = model.load_model(path_to_weights, device, optim_args)
+    else:
+        optimizer = T.optim.Adam(model.parameters(), *optim_args)
     return model, optimizer
 
 if __name__ == '__main__':
@@ -82,7 +86,7 @@ if __name__ == '__main__':
     tol = args.tol
 
     ### - Create Agent - ###
-    trader = Agent(alpha, beta, lr, dataset.shape, tau, '~/tmp/checkpoint', 's&ptrader')
+    trader = Agent(alpha, beta, lr, dataset.shape, tau, '/Users/bigc/Documents/Code - Offline/checkpoint', 's&ptrader')
 
     ### - env - ###
     env = PreTrainEnv(initial_fund, trade_price, num_tickers, max_hold, max_stock_value, 
