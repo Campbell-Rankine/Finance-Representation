@@ -45,10 +45,12 @@ class PreTrainEnv(Env):
         ### - Environment Attributes - ###
         self.timestep = 0
         self.MAX_ITERS = _iters_
-        self.available_funds = self.initial
+        self.available_funds = 70000
         self.max_hold = max_hold
         self.max_price = max_stock_value
         self.tolerance = tolerance
+
+        self.last_10 = []
 
         ### - Spaces - ###
         self.action_space = self.gen_action_space() 
@@ -84,31 +86,51 @@ class PreTrainEnv(Env):
 
         """
         indices = list(range(6, self.data.shape[1], 6))
-        t_ind = np.random.randint(max(self.timestep - self.tolerance, 0), min(self.timestep + self.tolerance, obs.shape[0]))
+        t_ind = np.random.randint(0, len(obs))
         pricing = np.array([x[indices] for x in obs])
         return pricing[t_ind]
 
     def _reward(self):
         self.worth = self.holdings @ self.current_prices
-        if self.i_worth is None:
-            self.i_worth = self.initial @ self.current_prices
-        self.net_change = self.worth - self.i_worth
+        self.last_10.append(self.worth)
+        #self.agent.holdings = self.worth
+        self.i_worth = self.initial @ self.initial_p
+        #self.net_change = self.worth - self.i_worth
         #TODO: Risk balancing, fund management, etc.
-        time_pen = self.timestep / self.MAX_ITERS
-        return self.net_change * time_pen
+        time_pen = self.timestep / len(self.data)
+        rew_ = ((self.worth * time_pen) / max(self.last_10)) + ((self.worth - self.last_10[-1]) / max(self.last_10))
+        return rew_
+
+    def update_inventory(self):
+        """
+        Write function to change amount to purchase, basically conducting the buy sell commands.
+        """
+        raise NotImplementedError
 
     def step(self, action):
         #update for reward
         self.holdings = action
         self.timestep += 1
 
+        if len(self.last_10) > 10:
+            self.last_10 = self.last_10[2:]
+
         #get reward and done flag
         worth = self._reward()
+        done = False
         self.prev_reward = self._reward()
-        done = worth <= 0 or self.available_funds < 0 or self.timestep > len(self.data)
+        if self.worth <= 0:
+            done = True
+        #print(self.available_funds, self.timestep, len(self.data))
+        if self.available_funds < 0 or self.timestep > len(self.data):
+            done = True
 
         #next observation
         obs = self._get_observation()
+        risk = np.std(obs)
+        risk = risk / max(np.std(obs, axis=1))
+        #print(risk, worth)
+        worth = worth - risk #Risk penalty if we follow R_set ~ Var[Observation]
         self.current_prices = self._get_current_prices(obs)
 
         return obs, worth, done, {}
@@ -118,12 +140,14 @@ class PreTrainEnv(Env):
         ### - Resets - ###
         self.i_worth = None
         self.holdings = np.zeros(self.num_tickers)
-        self.available_funds = self.initial
+        self.available_funds = 70000
         self.timestep = self.time_init #TODO: add random timestep init
 
         ### - first obs - ###
         obs = self._get_observation()
         self.current_prices = self._get_current_prices(obs)
+        self.initial_p = self._get_current_prices(obs)
+        #print(self.current_prices)
         #self.agent.reset()
         return obs
 

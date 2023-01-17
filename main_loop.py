@@ -101,24 +101,30 @@ if __name__ == '__main__':
         if i == 0:
             print(env.initial)
         obs = env.reset()
-        done = False
         score = 0
+        done = False
+        _score_ = 0
+        j = 1
         while not done:
             act = trader.choose_action(obs)
             new_state, reward, done, info = env.step(act)
+            if new_state.shape[0] < 30:
+                print()
+                break
             trader.remember(obs, act, reward, new_state, int(done))
             trader.learn()
-            score += reward
+            _score_ += (reward / j)
             obs = new_state
-            databar.set_description('ep %i score %.5f, 100 games avg %.3f, score %.5f, current %.5f, init: %.5f, exp %.5f' % 
-                (i, score, np.mean(score_history[-100:]), reward, env.worth, env.i_worth, last_sample_mag))
-        score_history.append(score)
-        if not trader.sample_mag is None:
+            databar.set_description('ep %i score %.5f, 100 games avg %.3f, score %.5f, current %.5f, init: %.5f, exp %.5f, hold %.5f % i' % 
+                (i, _score_, np.mean(score_history[-100:]), reward, env.worth, env.i_worth, last_sample_mag, np.mean(env.holdings), np.argmax(env.holdings)))
+            score_history.append(_score_)
             last_sample_mag = trader.sample_mag
-        if np.mean(score_history[-100:]) > 0:
-            databar.set_description('ep %i score %.5f, 100 games avg %.3f, score %.2f \n current %.5f, init: %.5f, exp %.5f' % 
-        (i, score, np.mean(score_history[-100:]), 0., env.worth, env.i_worth, last_sample_mag))
-        if i % 100 == 0:
+            j = j + 1
+        if i % 50 == 0 and env.tolerance >= 1:
+            env.tolerance -= 1
+        databar.set_description('ep %i score %.5f, 100 games avg %.3f, score %.2f \n current %.5f, init: %.5f, exp %.5f' % 
+            (i, score, np.mean(score_history[-100:]), 0., env.worth, env.i_worth, last_sample_mag))
+        if i % 1000 == 0:
             trader.save_models()
 
     print('Done Training')

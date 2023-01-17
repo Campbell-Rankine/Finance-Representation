@@ -57,14 +57,14 @@ class Actor(nn.Module):
         x = self.fc2(x)
         x = self.ln2(x)
         x = self.activation(x)
-        x = T.tanh(self.mu(x))
+        x = self.mu(x)
         return x.mean(0)
     
     # EVENTUALLY YOUR ENCODER SHOULD TAKE THE INPUT FOR STATE, TRY TO DESCRIBE MARKET HEALTH
     #TODO: Make the autoencoder follow the same structure 
 
     def save_checkpoint(self):
-        print('... saving checkpoint ...')
+        #print('... saving checkpoint ...')
         try:
             T.save(self.state_dict(), self.cp_save)
         except RuntimeError:
@@ -72,7 +72,7 @@ class Actor(nn.Module):
             T.save(self.state_dict(), self.cp_save + '.pth')
 
     def load_checkpoint(self):
-        print('... loading checkpoint ...')
+        #print('... loading checkpoint ...')
         try:
             self.load_state_dict(T.load(self.cp_save + '.pth'))
         except Exception:
@@ -143,7 +143,7 @@ class Critic(nn.Module):
         return state_action_value
 
     def save_checkpoint(self):
-        print('... saving checkpoint ...')
+        #print('... saving checkpoint ...')
         try:
             T.save(self.state_dict(), self.cp_save)
         except RuntimeError:
@@ -151,7 +151,7 @@ class Critic(nn.Module):
             T.save(self.state_dict(), self.cp_save + '.pth')
 
     def load_checkpoint(self):
-        print('... loading checkpoint ...')
+        #print('... loading checkpoint ...')
         try:
             self.load_state_dict(T.load(self.cp_save + '.pth'))
         except Exception:
@@ -165,6 +165,8 @@ class Agent(nn.Module):
         super(Agent, self).__init__()
         ### - ATTRIBUTES - ###
         self.lr = lr
+        self.holdings = 50
+        self.max_num_stocks = 50
         self.alpha = alpha
         self.beta = beta
         self.dims = dims
@@ -240,11 +242,12 @@ class Agent(nn.Module):
         self.storage.add(sample)
         mu_prime = mu + T.tensor(sample,
                                  dtype=T.float)
-        mu_prime = mu_prime.clip(0.)
+        mu_prime = mu_prime.clip(0., self.max_num_stocks)
         self.actor.train()
         return mu_prime.cpu().detach().numpy()
 
     def remember(self, state, action, reward, new_state, done):
+        #if np.mean(reward) > 1e-4:
         self.memory.add(state, action, reward, new_state, done)
 
     def learn(self):
@@ -272,7 +275,7 @@ class Agent(nn.Module):
         target = []
         for j in range(self.batch_size):
             toapp = reward[j] + self.gamma*critic_value_[j]*done[j]
-            target.append(toapp[0][0].item())
+            target.append(toapp.mean().item())
         target = T.tensor(target)#.to(self.critic.device)
         #print(target)
         target = target.view(self.batch_size, 1)
@@ -282,6 +285,9 @@ class Agent(nn.Module):
         self.critic.optim.zero_grad()
         critic_loss = F.mse_loss(target, critic_value)
         critic_loss.backward()
+
+        nn.utils.clip_grad_value_(self.critic.parameters(), clip_value=10.0)
+
         self.critic.optim.step()
 
         self.critic.eval()
@@ -291,12 +297,17 @@ class Agent(nn.Module):
         actor_loss = -self.critic.forward(state, mu)
         actor_loss = T.mean(actor_loss)
         actor_loss.backward()
-        self.actor.optim.step()
 
+        nn.utils.clip_grad_value_(self.actor.parameters(), clip_value=10.0)
+
+        self.actor.optim.step()
+        #self.gamma *= self.gamma
         self.update_()
 
 
     ### - Helpers - ###
+    def update_holdings(self, new_vec):
+        self.holdings = new_vec
 
     def save_models(self):
         self.actor.save_checkpoint()

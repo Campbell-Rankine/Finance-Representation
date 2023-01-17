@@ -37,16 +37,16 @@ class OrnsteinUhlenbeckActionNoise:
     as adding normally distributed noise to the policy gradients during discrete DDPG. I.E. This class
     controls action exploration
     """
-    def __init__(self, action_dim, mu=0, theta = 0.15, sigma = 0.2):
+    def __init__(self, action_dim, mu=0, theta = 0.15, sigma = 0.1):
         self.action_dim = action_dim
         self.mu = mu
         self.theta = theta
         self.sigma = sigma
 
-        self.X = self.mu*np.ones(self.action_dim)
+        self.X = self.mu*np.zeros(self.action_dim)
 
     def reset(self):
-        self.X = self.mu*np.ones(self.action_dim)
+        self.X = self.mu*np.zeros(self.action_dim)
 
     def sample(self):
         dx = self.theta * (self.mu - self.X)
@@ -95,10 +95,10 @@ def process_command_line_arguments_() -> argparse.Namespace:
     parser.add_argument("-w", "--w", dest="w", metavar="w", default = 30,
                         type=int, help="Network history observation window")
 
-    parser.add_argument("-iters", "--iters", dest="iters", metavar="iters", default = 1e9,
+    parser.add_argument("-iters", "--iters", dest="iters", metavar="iters", default = 100,
                         type=int, help="Max iterations pre epoch")
 
-    parser.add_argument("-tol", "--tol", dest="tol", metavar="tol", default = 7,
+    parser.add_argument("-tol", "--tol", dest="tol", metavar="tol", default = 2,
                         type=int, help="Pricing tolerance for generating random pricing")
 
     parser.add_argument("-cp", "--cp", dest="cp", metavar="cp", default = '/tmp/cp',
