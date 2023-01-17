@@ -58,7 +58,6 @@ class Actor(nn.Module):
         x = self.ln2(x)
         x = self.activation(x)
         x = T.tanh(self.mu(x))
-        print(x.shape)
         return x.mean(0)
     
     # EVENTUALLY YOUR ENCODER SHOULD TAKE THE INPUT FOR STATE, TRY TO DESCRIBE MARKET HEALTH
@@ -109,7 +108,13 @@ class Critic(nn.Module):
 
         self.ln2 = nn.LayerNorm(h2)
 
-        self.q = nn.Linear(h2, 1)
+        self.fc3 = nn.Linear(h2, self.action_size)
+        f2 = 1./np.sqrt(self.fc2.weight.data.size()[0])
+        nn.init.uniform_(self.fc2.weight, -f2, f2)
+
+        self.ln3 = nn.LayerNorm(self.action_size)
+
+        self.q = nn.Linear(self.action_size, 1)
         f3 = 0.003
         nn.init.uniform_(self.q.weight, -f3, f3)
 
@@ -118,7 +123,7 @@ class Critic(nn.Module):
         print('L1: U(%.3f, %.3f), L2: U(%.3f, %.3f), Q: U(%.3f, %.3f)' % (-f1, f1, -f2, f2, -f3, f3))
         print()
 
-        self.av = nn.Linear(h2, self.action_size)
+        self.av = nn.Linear(self.action_size, self.action_size)
 
         self.optim = T.optim.Adam(self.parameters(), lr=lr, betas=betas, weight_decay=self.w_decay)
         self.device = device
@@ -129,6 +134,8 @@ class Critic(nn.Module):
         state_value = F.relu(state_value)
         state_value = self.fc2(state_value)
         state_value = self.ln2(state_value)
+        state_value = self.fc3(state_value)
+        state_value = self.ln3(state_value)
 
         action_value = self.activation(self.av(action))
         state_action_value = self.activation(T.add(state_value, action_value))
@@ -154,7 +161,7 @@ class Critic(nn.Module):
 from Trader.buffer import *
 class Agent(nn.Module):
     def __init__(self, alpha, beta, lr, dims, tau, cp, name, gamma=0.99, num_actions=138, obs_size=6,  max_size=1000000, h1=400,
-                 h2=500, batch_size=64, w_decay=0.1):
+                 h2=500, batch_size=30, w_decay=0.1):
         super(Agent, self).__init__()
         ### - ATTRIBUTES - ###
         self.lr = lr
@@ -226,12 +233,14 @@ class Agent(nn.Module):
         self.actor.eval()
         observation = T.tensor(observation, dtype=T.float)
         mu = self.actor.forward(observation)
-        print(mu.shape)
+        #print(mu.shape)
         sample = self.noise.sample()
-        print(sample.shape)
+        self.sample_mag = T.norm(T.tensor(sample))
+        #print(sample.shape)
         self.storage.add(sample)
         mu_prime = mu + T.tensor(sample,
                                  dtype=T.float)
+        mu_prime = mu_prime.clip(0.)
         self.actor.train()
         return mu_prime.cpu().detach().numpy()
 
@@ -239,11 +248,11 @@ class Agent(nn.Module):
         self.memory.add(state, action, reward, new_state, done)
 
     def learn(self):
+        #TODO: FIX LEARN FUNCTION
         if self.memory.mem_cntr < self.batch_size:
             return
         state, action, reward, new_state, done = \
-                                      self.memory.sample(self.obs_size)
-
+                                      self.memory.sample(self.batch_size)
         reward = T.tensor(reward, dtype=T.float)#.to(self.critic.device)
         done = T.tensor(done)#.to(self.critic.device)
         new_state = T.tensor(new_state, dtype=T.float)#.to(self.critic.device)
@@ -254,6 +263,7 @@ class Agent(nn.Module):
         self.target_actor.eval()
         self.target_critic.eval()
         self.critic.eval()
+
         target_actions = self.target_actor.forward(new_state)
         critic_value_ = self.target_critic.forward(new_state, target_actions)
         critic_value = self.critic.forward(state, action)
@@ -261,27 +271,29 @@ class Agent(nn.Module):
         ### Secondary CPU parallel loop - ###
         target = []
         for j in range(self.batch_size):
-            target.append(reward[j] + self.gamma*critic_value_[j]*done[j])
+            toapp = reward[j] + self.gamma*critic_value_[j]*done[j]
+            target.append(toapp[0][0].item())
         target = T.tensor(target)#.to(self.critic.device)
+        #print(target)
         target = target.view(self.batch_size, 1)
         
         ### - Optimize Section: Can also be run in parallel - ###
         self.critic.train()
-        self.critic.optimizer.zero_grad()
+        self.critic.optim.zero_grad()
         critic_loss = F.mse_loss(target, critic_value)
         critic_loss.backward()
-        self.critic.optimizer.step()
+        self.critic.optim.step()
 
         self.critic.eval()
-        self.actor.optimizer.zero_grad()
+        self.actor.optim.zero_grad()
         mu = self.actor.forward(state)
         self.actor.train()
         actor_loss = -self.critic.forward(state, mu)
         actor_loss = T.mean(actor_loss)
         actor_loss.backward()
-        self.actor.optimizer.step()
+        self.actor.optim.step()
 
-        self.update_network_parameters()
+        self.update_()
 
 
     ### - Helpers - ###

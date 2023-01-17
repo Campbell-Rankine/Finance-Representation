@@ -95,21 +95,29 @@ if __name__ == '__main__':
     print('--------------- Begin Training ---------------')
     np.random.seed(0)
     score_history = []
-    for i in range(int(iters)):
+    databar = tqdm(range(int(iters)))
+    last_sample_mag = 0.
+    for i in databar:
+        if i == 0:
+            print(env.initial)
         obs = env.reset()
         done = False
         score = 0
         while not done:
-            print(i)
             act = trader.choose_action(obs)
             new_state, reward, done, info = env.step(act)
             trader.remember(obs, act, reward, new_state, int(done))
             trader.learn()
             score += reward
             obs = new_state
+            databar.set_description('ep %i score %.5f, 100 games avg %.3f, score %.5f, current %.5f, init: %.5f, exp %.5f' % 
+                (i, score, np.mean(score_history[-100:]), reward, env.worth, env.i_worth, last_sample_mag))
         score_history.append(score)
-        print('episode ', i, 'score %.2f' % score,
-          'trailing 100 games avg %.3f' % np.mean(score_history[-100:]))
+        if not trader.sample_mag is None:
+            last_sample_mag = trader.sample_mag
+        if np.mean(score_history[-100:]) > 0:
+            databar.set_description('ep %i score %.5f, 100 games avg %.3f, score %.2f \n current %.5f, init: %.5f, exp %.5f' % 
+        (i, score, np.mean(score_history[-100:]), 0., env.worth, env.i_worth, last_sample_mag))
         if i % 100 == 0:
             trader.save_models()
 

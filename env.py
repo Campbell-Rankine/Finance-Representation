@@ -21,12 +21,15 @@ from torch.utils.tensorboard import SummaryWriter
 from collections import deque
 from Trader.trade_utils import plot_mem
 
+#TODO: Weird reset bug? Goes to the millions for some reason, should probably fix that
+
 class PreTrainEnv(Env):
     def __init__(self, initial_fund, trade_price, num_tickers, max_hold, max_stock_value, window, _iters_, dataset,
                 tolerance, agent):
         super(PreTrainEnv, self).__init__()
 
         ### - Reset Vars - ###
+        self.i_worth = None
         self.agent = agent
         self.initial = initial_fund
         self.trade_price = trade_price
@@ -83,14 +86,13 @@ class PreTrainEnv(Env):
         indices = list(range(6, self.data.shape[1], 6))
         t_ind = np.random.randint(max(self.timestep - self.tolerance, 0), min(self.timestep + self.tolerance, obs.shape[0]))
         pricing = np.array([x[indices] for x in obs])
-        print(pricing.shape)
         return pricing[t_ind]
 
     def _reward(self):
-        print(self.holdings.shape, self.current_prices.shape)
-        worth = self.holdings @ self.current_prices
-        i_worth = self.initial @ self.current_prices
-        self.net_change = worth - i_worth
+        self.worth = self.holdings @ self.current_prices
+        if self.i_worth is None:
+            self.i_worth = self.initial @ self.current_prices
+        self.net_change = self.worth - self.i_worth
         #TODO: Risk balancing, fund management, etc.
         time_pen = self.timestep / self.MAX_ITERS
         return self.net_change * time_pen
@@ -114,6 +116,7 @@ class PreTrainEnv(Env):
 
     def reset(self):
         ### - Resets - ###
+        self.i_worth = None
         self.holdings = np.zeros(self.num_tickers)
         self.available_funds = self.initial
         self.timestep = self.time_init #TODO: add random timestep init
