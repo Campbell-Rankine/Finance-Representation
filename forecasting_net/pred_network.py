@@ -8,7 +8,7 @@ import torchvision.models as models
 
 import ray
 from tqdm import tqdm
-from forecasting_net.network_utils import *
+from network_utils import *
 
 class Encoder(nn.Module):
 
@@ -39,8 +39,11 @@ class Encoder(nn.Module):
 
         ### - 512 Dimensional output representation vector - ###
         del self.encoder.classifier
+        
+        self.encoder.features[28].out_channels = 512
+        self.encoder.features[30].kernel_size=4
+        print(self.encoder)
         self.avgpool = nn.AdaptiveAvgPool2d(output_size=1)
-        self.encoder.out = nn.Conv2d(512, latent, 2, 1)
         #self.encoder.Lin = nn.Linear(1024,128)
 
         self.encoder = self._encodify_(self.encoder)
@@ -86,16 +89,17 @@ class Encoder(nn.Module):
         for module_encode in self.encoder:
             #x_current = T.tensor(x_current, dtype=float)
             output = module_encode(x_current)
-
             # If the module is pooling, there are two outputs, the second the pool indices
             if isinstance(output, tuple) and len(output) == 2:
                 x_current = output[0]
-                pool_indices.append(output[1])
+                ind = output[1]
+                pool_indices.append(ind)
             else:
                 x_current = output
+        x_current = self.avgpool(x_current)
         activation = self.activation(x_current)
         h = activation.register_hook(self.activations_hook)
-        return self.out(activation), pool_indices
+        return activation, pool_indices
 
     def get_shape(self):
         """
@@ -124,7 +128,6 @@ class Encoder(nn.Module):
             else:
                 modules.append(module)
         modules.append(self.avgpool)
-        #modules.append(self.encoder.Lin)
         return modules
 
 def invert_encoder(encoder):
@@ -151,7 +154,7 @@ def invert_encoder(encoder):
                           'padding' : module.padding}
                 module_transpose = nn.MaxUnpool2d(**args)
                 decoder += [module_transpose]
-    decoder = decoder[-3:-1]
+    decoder = decoder[:-2]
     return nn.ModuleList(decoder)
 
 
@@ -163,7 +166,6 @@ class Decoder(nn.Module):
         """
 
         super(Decoder, self).__init__()
-        self.in_ = nn.ConvTranspose2d(encoder.latent, 512, 2, 1)
         self.decoder = invert_encoder(encoder.encoder)
         self.in_channels = encoder.out_channels
         self.out_channels = encoder.in_channels
@@ -172,7 +174,6 @@ class Decoder(nn.Module):
 
     def forward(self, x, pool_indices):
         x_current = x
-        x_current = self.in_(x_current)
         k_pool = 0
         reversed_pool_indices = list(reversed(pool_indices))
         for module_decode in self.decoder:

@@ -21,8 +21,8 @@ import tensorboard
 from torch.utils.tensorboard import SummaryWriter
 
 ### - internal - ###
-from forecasting_net.pred_network import *
-from forecasting_net.network_utils import *
+from pred_network import *
+from network_utils import *
 
 """
 Add stratified K means training structure and also bayesopt training cycle
@@ -241,7 +241,7 @@ if __name__ == '__main__':
     dims = dataset[0].shape
     
     ### - Model Definition - ###
-    encoder_args = {'batch_size': args.batch, 'window_size': args.window, 'latent': args.latent,
+    encoder_args = {'batch_size': args.batch, 'window_size': args.window, 'latent': 138,
                     'dims': dims}
     decoder_args = {}
 
