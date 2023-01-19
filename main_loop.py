@@ -115,8 +115,8 @@ if __name__ == '__main__':
             trader.learn()
             _score_ += (reward / j)
             obs = new_state
-            databar.set_description('ep %i score %.5f, 100 games avg %.3f, score %.5f, current %.5f, init: %.5f, exp %.5f, hold %.5f % i' % 
-                (i, _score_, np.mean(score_history[-100:]), reward, env.worth, env.i_worth, last_sample_mag, np.mean(env.holdings), np.argmax(env.holdings)))
+            databar.set_description('ep %i score %.5f, 100 games avg %.3f, score %.5f, current %.5f, init: %.5f, exp %.5f, avail: %.5f' % 
+                (i, _score_, np.mean(score_history[-100:]), reward, env.worth, env.i_worth, last_sample_mag, env.available_funds))
             score_history.append(_score_)
             last_sample_mag = trader.sample_mag
             j = j + 1

@@ -32,6 +32,7 @@ class PreTrainEnv(Env):
         self.i_worth = None
         self.agent = agent
         self.initial = initial_fund
+        self.inv = initial_fund
         self.trade_price = trade_price
         self.data = dataset #(DATASET FORMAT, self.dims = (num_tickers, num_features, num_samples))
 
@@ -58,6 +59,7 @@ class PreTrainEnv(Env):
 
         ### - Timestep vars - ###
         self.holdings = np.zeros(num_tickers, dtype=np.int64)
+        self.holdings_p = np.zeros(num_tickers, dtype=np.int64)
         self.current_prices = np.zeros(num_tickers, dtype=np.float32)
 
         ### - Rendering - ###
@@ -98,18 +100,53 @@ class PreTrainEnv(Env):
         #self.net_change = self.worth - self.i_worth
         #TODO: Risk balancing, fund management, etc.
         time_pen = self.timestep / len(self.data)
-        rew_ = ((self.worth * time_pen) / max(self.last_10)) + ((self.worth - self.last_10[-1]) / max(self.last_10))
+        rew_ = (((self.worth - self.trade_price) * time_pen) / max(self.last_10)) + ((self.worth - self.last_10[-1]) / max(self.last_10))
         return rew_
 
     def update_inventory(self):
         """
         Write function to change amount to purchase, basically conducting the buy sell commands.
+
+        THIS FUNCTION CAN BE PARALLELIZED
         """
-        raise NotImplementedError
+        diff = self.holdings - self.holdings_p
+        comm = ['buy' if x > 0. else 'sell' for x in diff]
+        for i, x in enumerate(diff):
+            if x == 0:
+                comm[i] = 'hold'
+        diff = [int(x) for x in diff]
+        #follow max_num_stocks
+        for i, x in enumerate(diff):
+            add = (self.inv[i] + x) - 50
+            if add > 0:
+                x = x - add
+        #self.inv = self.inv + diff
+        #print(self.inv)
+        comm = list(zip(diff, comm))
+        #print(comm)
+        #update funds
+        sell = 0
+        buy = 0
+        for i, x in enumerate(comm):
+            if x[1] == 'sell':
+                sell += (x[0] * self.current_prices[i])
+            elif x[1] == 'buy':
+                buy += (x[0] * self.current_prices[i])
+
+        #update inv
+        self.inv = self.inv + diff
+        self.inv = np.clip(self.inv, 0., 50)
+
+        self.available_funds = self.available_funds - sell
+        self.available_funds = self.available_funds - buy
+        #print(comm)
 
     def step(self, action):
         #update for reward
+        self.holdings_p = self.holdings
         self.holdings = action
+        if self.holdings_p.shape == self.holdings.shape:
+            self.update_inventory()
         self.timestep += 1
 
         if len(self.last_10) > 10:
